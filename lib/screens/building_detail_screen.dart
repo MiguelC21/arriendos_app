@@ -45,16 +45,22 @@ class _BuildingDetailScreenState extends ConsumerState<BuildingDetailScreen> {
         title: Text(widget.building.name),
         actions: [
           IconButton(
-            onPressed: () =>
-                ref.invalidate(buildingDebtProvider(widget.building.id)),
+            onPressed: () {
+              ref.invalidate(buildingDebtProvider(widget.building.id));
+              ref
+                  .read(unitProvider.notifier)
+                  .loadUnitsForBuilding(widget.building.id);
+            },
             icon: const Icon(Icons.refresh_rounded),
           ),
         ],
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          ref.invalidate(unitProvider);
           ref.invalidate(buildingDebtProvider(widget.building.id));
+          await ref
+              .read(unitProvider.notifier)
+              .loadUnitsForBuilding(widget.building.id);
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
