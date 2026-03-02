@@ -189,6 +189,16 @@ class DatabaseHelper {
     );
   }
 
+  Future<int> updateContract(Contract contract) async {
+    final db = await database;
+    return await db.update(
+      'contracts',
+      contract.toMap(),
+      where: 'id = ?',
+      whereArgs: [contract.id],
+    );
+  }
+
   // Monthly Payments
   Future<int> insertMonthlyPayment(MonthlyPayment payment) async {
     final db = await database;
@@ -259,5 +269,64 @@ class DatabaseHelper {
       orderBy: 'fecha DESC',
     );
     return List.generate(maps.length, (i) => Abono.fromMap(maps[i]));
+  }
+
+  Future<void> applyCascadingPayment({
+    required double totalAmount,
+    required String method,
+    required String contractId,
+  }) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      // 1. Obtener pagos pendientes ordenamos por antigüedad
+      final List<Map<String, dynamic>> maps = await txn.query(
+        'monthly_payments',
+        where: 'contratoId = ? AND valorPagado < valorTotal',
+        whereArgs: [contractId],
+        orderBy: 'año ASC, mes ASC',
+      );
+
+      double remainingMoney = totalAmount;
+
+      for (var map in maps) {
+        if (remainingMoney <= 0) break;
+
+        final paymentId = map['id'] as String;
+        final total = map['valorTotal'] as double;
+        final paid = map['valorPagado'] as double;
+        final debt = total - paid;
+
+        double amountToApply = remainingMoney >= debt ? debt : remainingMoney;
+
+        // Insertar Abono
+        final abonoId =
+            DateTime.now().millisecondsSinceEpoch.toString() +
+            remainingMoney.toInt().toString();
+        await txn.insert('abonos', {
+          'id': abonoId,
+          'pagoId': paymentId,
+          'valor': amountToApply,
+          'fecha': DateTime.now().toIso8601String(),
+          'metodo': method,
+          'creadoEn': DateTime.now().toIso8601String(),
+        });
+
+        // Actualizar Pago Mensual
+        await txn.execute(
+          '''
+          UPDATE monthly_payments 
+          SET valorPagado = valorPagado + ?,
+              estado = CASE 
+                WHEN (valorPagado + ?) >= valorTotal THEN 'pagado'
+                ELSE 'parcial'
+              END
+          WHERE id = ?
+        ''',
+          [amountToApply, amountToApply, paymentId],
+        );
+
+        remainingMoney -= amountToApply;
+      }
+    });
   }
 }

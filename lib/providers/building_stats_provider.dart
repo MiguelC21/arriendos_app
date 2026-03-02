@@ -117,3 +117,39 @@ final buildingOccupancyProvider =
 
       return {'total': total, 'rented': rented};
     });
+
+final unitDebtProvider = FutureProvider.family<double, String>((
+  ref,
+  unitId,
+) async {
+  final dbHelper = DatabaseHelper();
+  final db = await dbHelper.database;
+
+  final contracts = await db.query(
+    'contracts',
+    where: 'apartamentoId = ? AND activo = 1',
+    whereArgs: [unitId],
+    limit: 1,
+  );
+
+  if (contracts.isEmpty) return 0.0;
+
+  final contractId = contracts.first['id'] as String;
+
+  final payments = await db.query(
+    'monthly_payments',
+    where: 'contratoId = ?',
+    whereArgs: [contractId],
+  );
+
+  double debt = 0.0;
+  for (var p in payments) {
+    final total = p['valorTotal'] as double;
+    final paid = p['valorPagado'] as double;
+    if (total > paid) {
+      debt += (total - paid);
+    }
+  }
+
+  return debt;
+});

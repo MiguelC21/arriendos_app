@@ -51,4 +51,24 @@ class Contract {
       createdAt: DateTime.parse(map['creadoEn']),
     );
   }
+
+  Contract copyWith({
+    String? tenantName,
+    String? phone,
+    double? contractValue,
+    bool? active,
+    DateTime? endDate,
+  }) {
+    return Contract(
+      id: id,
+      unitId: unitId,
+      tenantName: tenantName ?? this.tenantName,
+      phone: phone ?? this.phone,
+      startDate: startDate,
+      endDate: endDate ?? this.endDate,
+      contractValue: contractValue ?? this.contractValue,
+      active: active ?? this.active,
+      createdAt: createdAt,
+    );
+  }
 }

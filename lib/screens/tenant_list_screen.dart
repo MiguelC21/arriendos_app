@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import '../providers/tenant_provider.dart';
+import '../providers/building_stats_provider.dart';
 import 'unit_detail_screen.dart';
 import '../services/database_helper.dart';
 import '../models/unit.dart';
@@ -86,6 +88,25 @@ class TenantListScreen extends ConsumerWidget {
                           fontSize: 13,
                         ),
                       ),
+                      ref
+                          .watch(unitDebtProvider(tenant.unitId))
+                          .when(
+                            data: (debt) => debt > 0
+                                ? Padding(
+                                    padding: const EdgeInsets.only(top: 4),
+                                    child: Text(
+                                      'Deuda: ${NumberFormat.currency(locale: 'es_CO', symbol: '\$', decimalDigits: 0).format(debt)}',
+                                      style: const TextStyle(
+                                        color: Colors.redAccent,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  )
+                                : const SizedBox.shrink(),
+                            loading: () => const SizedBox.shrink(),
+                            error: (_, __) => const SizedBox.shrink(),
+                          ),
                     ],
                   ),
                   trailing: const Icon(

@@ -30,6 +30,7 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
     ref.invalidate(dashboardStatsProvider);
     ref.invalidate(activeTenantsProvider);
     ref.invalidate(buildingOccupancyProvider(buildingId));
+    ref.invalidate(unitDebtProvider(contract.unitId));
   }
 
   Future<void> terminateContract(
@@ -47,6 +48,13 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
     ref.invalidate(dashboardStatsProvider);
     ref.invalidate(activeTenantsProvider);
     ref.invalidate(buildingOccupancyProvider(buildingId));
+    ref.invalidate(unitDebtProvider(unitId));
+  }
+
+  Future<void> updateContract(Contract contract, WidgetRef ref) async {
+    await _dbHelper.updateContract(contract);
+    state = {...state, contract.unitId: contract};
+    ref.invalidate(activeTenantsProvider);
   }
 
   Future<void> _checkAndGenerateMonthlyPayment(Contract contract) async {

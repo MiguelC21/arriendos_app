@@ -34,43 +34,21 @@ class PaymentNotifier extends StateNotifier<List<MonthlyPayment>> {
     required String unitId,
     required WidgetRef ref,
   }) async {
-    // 1. Obtener pagos pendientes ordenados por antigüedad (mes/año)
-    final allPayments = await _dbHelper.getPaymentsForContract(contractId);
-    // Filtrar solo los que deben dinero y ordenar ASC (antiguos primero)
-    final pendingPayments = allPayments
-        .where((p) => p.paidValue < p.totalValue)
-        .toList()
-        .reversed
-        .toList();
+    await _dbHelper.applyCascadingPayment(
+      totalAmount: totalAmount,
+      method: method,
+      contractId: contractId,
+    );
 
-    double remainingMoney = totalAmount;
-
-    for (var payment in pendingPayments) {
-      if (remainingMoney <= 0) break;
-
-      double debt = payment.totalValue - payment.paidValue;
-      double amountToApply = remainingMoney >= debt ? debt : remainingMoney;
-
-      final abono = Abono(
-        paymentId: payment.id,
-        value: amountToApply,
-        date: DateTime.now(),
-        method: method,
-      );
-
-      await _dbHelper.insertAbono(abono);
-      remainingMoney -= amountToApply;
-    }
-
-    // 2. Recargar estado e invalidar providers
     await loadPaymentsForContract(contractId);
     _invalidateStats(ref, buildingId, unitId);
   }
 
-  void _invalidateStats(WidgetRef ref, String buildingId, String unitId) {
+  void _invalidateStats(ref, String buildingId, String unitId) {
     ref.invalidate(dashboardStatsProvider);
     ref.invalidate(buildingDebtProvider(buildingId));
     ref.invalidate(unitStatusProvider(unitId));
+    ref.invalidate(unitDebtProvider(unitId));
   }
 }
 

@@ -323,6 +323,26 @@ class _UnitCard extends ConsumerWidget {
                       ],
                     ],
                   ),
+                  if (contract != null)
+                    ref
+                        .watch(unitDebtProvider(unit.id))
+                        .when(
+                          data: (debt) => debt > 0
+                              ? Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Text(
+                                    'Deuda: ${NumberFormat.currency(locale: 'es_CO', symbol: '\$', decimalDigits: 0).format(debt)}',
+                                    style: const TextStyle(
+                                      color: Colors.redAccent,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                )
+                              : const SizedBox.shrink(),
+                          loading: () => const SizedBox.shrink(),
+                          error: (_, __) => const SizedBox.shrink(),
+                        ),
                 ],
               ),
             ),
