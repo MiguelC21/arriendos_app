@@ -5,6 +5,7 @@ import '../services/database_helper.dart';
 import 'building_stats_provider.dart';
 import 'dashboard_provider.dart';
 import 'tenant_provider.dart';
+import 'payment_provider.dart';
 
 class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
   final DatabaseHelper _dbHelper;
@@ -13,6 +14,7 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
 
   Future<void> loadActiveContractForUnit(String unitId) async {
     final contract = await _dbHelper.getActiveContractForUnit(unitId);
+    if (!mounted) return;
     state = {...state, unitId: contract};
 
     if (contract != null) {
@@ -31,6 +33,10 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
     ref.invalidate(activeTenantsProvider);
     ref.invalidate(buildingOccupancyProvider(buildingId));
     ref.invalidate(unitDebtProvider(contract.unitId));
+    ref.invalidate(unitStatusProvider(contract.unitId));
+    ref.invalidate(buildingDebtProvider(buildingId));
+    // Importante: invalidar la lista de pagos para que el primer cobro generado aparezca
+    ref.invalidate(paymentProvider);
   }
 
   Future<void> terminateContract(
@@ -40,6 +46,7 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
     WidgetRef ref,
   ) async {
     await _dbHelper.terminateContract(contractId);
+    if (!mounted) return;
     state = {...state, unitId: null};
 
     // Invalidar para que la UI se refresque y el apto salga como Disponible
@@ -53,6 +60,7 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
 
   Future<void> updateContract(Contract contract, WidgetRef ref) async {
     await _dbHelper.updateContract(contract);
+    if (!mounted) return;
     state = {...state, contract.unitId: contract};
     ref.invalidate(activeTenantsProvider);
   }

@@ -11,7 +11,9 @@ class PaymentNotifier extends StateNotifier<List<MonthlyPayment>> {
   PaymentNotifier(this._dbHelper) : super([]);
 
   Future<void> loadPaymentsForContract(String contractId) async {
-    state = await _dbHelper.getPaymentsForContract(contractId);
+    final payments = await _dbHelper.getPaymentsForContract(contractId);
+    if (!mounted) return;
+    state = payments;
   }
 
   Future<void> addAbono(
@@ -23,6 +25,7 @@ class PaymentNotifier extends StateNotifier<List<MonthlyPayment>> {
   ) async {
     await _dbHelper.insertAbono(abono);
     await loadPaymentsForContract(contractId);
+    if (!mounted) return;
     _invalidateStats(ref, buildingId, unitId);
   }
 
@@ -41,6 +44,7 @@ class PaymentNotifier extends StateNotifier<List<MonthlyPayment>> {
     );
 
     await loadPaymentsForContract(contractId);
+    if (!mounted) return;
     _invalidateStats(ref, buildingId, unitId);
   }
 
@@ -53,6 +57,7 @@ class PaymentNotifier extends StateNotifier<List<MonthlyPayment>> {
   }) async {
     await _dbHelper.deleteAbono(abonoId);
     await loadPaymentsForContract(contractId);
+    if (!mounted) return;
     _invalidateStats(ref, buildingId, unitId);
   }
 
