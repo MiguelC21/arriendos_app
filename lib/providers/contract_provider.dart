@@ -1,0 +1,101 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/contract.dart';
+import '../models/monthly_payment.dart';
+import '../services/database_helper.dart';
+import 'building_stats_provider.dart';
+import 'dashboard_provider.dart';
+import 'tenant_provider.dart';
+
+class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
+  final DatabaseHelper _dbHelper;
+
+  ContractNotifier(this._dbHelper) : super({});
+
+  Future<void> loadActiveContractForUnit(String unitId) async {
+    final contract = await _dbHelper.getActiveContractForUnit(unitId);
+    state = {...state, unitId: contract};
+
+    if (contract != null) {
+      await _checkAndGenerateMonthlyPayment(contract);
+    }
+  }
+
+  Future<void> addContract(Contract contract, WidgetRef ref) async {
+    await _dbHelper.insertContract(contract);
+    await loadActiveContractForUnit(contract.unitId);
+    ref.invalidate(dashboardStatsProvider);
+    ref.invalidate(activeTenantsProvider);
+  }
+
+  Future<void> terminateContract(
+    String contractId,
+    String unitId,
+    String buildingId,
+    WidgetRef ref,
+  ) async {
+    await _dbHelper.terminateContract(contractId);
+    state = {...state, unitId: null};
+
+    // Invalidar para que la UI se refresque y el apto salga como Disponible
+    ref.invalidate(buildingDebtProvider(buildingId));
+    ref.invalidate(unitStatusProvider(unitId));
+    ref.invalidate(dashboardStatsProvider);
+    ref.invalidate(activeTenantsProvider);
+  }
+
+  Future<void> _checkAndGenerateMonthlyPayment(Contract contract) async {
+    final now = DateTime.now();
+
+    // Empezamos desde el mes de inicio del contrato
+    DateTime checkDate = DateTime(
+      contract.startDate.year,
+      contract.startDate.month,
+    );
+
+    // Mientras la fecha que revisamos no sea futura al mes actual
+    while (checkDate.isBefore(now) ||
+        (checkDate.year == now.year && checkDate.month == now.month)) {
+      // Un pago de un mes X se genera si ya llegamos al día pactado en ese mes
+      final generationDate = DateTime(
+        checkDate.year,
+        checkDate.month,
+        contract.startDate.day,
+      );
+
+      if (now.isAfter(generationDate) || now.isAtSameMomentAs(generationDate)) {
+        final existingPayment = await _dbHelper.getPaymentForMonth(
+          contract.id,
+          checkDate.month,
+          checkDate.year,
+        );
+
+        if (existingPayment == null) {
+          // La fecha límite es el mismo día del SIGUIENTE mes (pago a mes vencido)
+          final dueDate = DateTime(
+            checkDate.year,
+            checkDate.month + 1,
+            contract.startDate.day,
+          );
+
+          final payment = MonthlyPayment(
+            contractId: contract.id,
+            month: checkDate.month,
+            year: checkDate.year,
+            totalValue: contract.contractValue,
+            dueDate: dueDate,
+            status: PaymentStatus.pendiente,
+          );
+          await _dbHelper.insertMonthlyPayment(payment);
+        }
+      }
+
+      // Siguiente mes para la comprobación
+      checkDate = DateTime(checkDate.year, checkDate.month + 1);
+    }
+  }
+}
+
+final contractProvider =
+    StateNotifierProvider<ContractNotifier, Map<String, Contract?>>((ref) {
+      return ContractNotifier(DatabaseHelper());
+    });
