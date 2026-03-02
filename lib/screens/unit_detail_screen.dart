@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../models/unit.dart';
@@ -284,8 +283,13 @@ class _UnitDetailScreenState extends ConsumerState<UnitDetailScreen> {
   void _showAddContractDialog(BuildContext context, WidgetRef ref) {
     final nameController = TextEditingController();
     final phoneController = TextEditingController();
+    final currencyFormat = NumberFormat.currency(
+      locale: 'es_CO',
+      symbol: '',
+      decimalDigits: 0,
+    );
     final valueController = TextEditingController(
-      text: widget.unit.baseValue.toString(),
+      text: currencyFormat.format(widget.unit.baseValue).trim(),
     );
     DateTime selectedDate = DateTime.now();
 

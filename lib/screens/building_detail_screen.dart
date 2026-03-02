@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../models/building.dart';
@@ -396,8 +395,13 @@ class _UnitCard extends ConsumerWidget {
 
   void _showEditUnitDialog(BuildContext context, WidgetRef ref, Unit unit) {
     final numberController = TextEditingController(text: unit.number);
+    final currencyFormat = NumberFormat.currency(
+      locale: 'es_CO',
+      symbol: '',
+      decimalDigits: 0,
+    );
     final valueController = TextEditingController(
-      text: unit.baseValue.toString(),
+      text: currencyFormat.format(unit.baseValue).trim(),
     );
 
     showModalBottomSheet(
