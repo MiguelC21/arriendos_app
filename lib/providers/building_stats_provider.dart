@@ -91,3 +91,29 @@ final unitStatusProvider = FutureProvider.family<String, String>((
 
   return hasMora ? 'En Mora' : 'Pendiente';
 });
+
+final buildingOccupancyProvider =
+    FutureProvider.family<Map<String, int>, String>((ref, buildingId) async {
+      final dbHelper = DatabaseHelper();
+      final db = await dbHelper.database;
+
+      final totalResult = await db.rawQuery(
+        'SELECT COUNT(*) as count FROM units WHERE buildingId = ?',
+        [buildingId],
+      );
+
+      final rentedResult = await db.rawQuery(
+        '''
+    SELECT COUNT(*) as count 
+    FROM units u
+    JOIN contracts c ON u.id = c.apartamentoId
+    WHERE u.buildingId = ? AND c.activo = 1
+  ''',
+        [buildingId],
+      );
+
+      final total = (totalResult.first['count'] as int?) ?? 0;
+      final rented = (rentedResult.first['count'] as int?) ?? 0;
+
+      return {'total': total, 'rented': rented};
+    });

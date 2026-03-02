@@ -3,10 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../providers/building_provider.dart';
 import '../providers/dashboard_provider.dart';
-import '../providers/unit_provider.dart';
 import '../models/building.dart';
 import 'building_detail_screen.dart';
 import 'tenant_list_screen.dart';
+import '../providers/building_stats_provider.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -239,16 +239,6 @@ class _BuildingCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final unitsMap = ref.watch(unitProvider);
-    final units = unitsMap[building.id] ?? [];
-
-    // Cargar unidades si no están
-    if (!unitsMap.containsKey(building.id)) {
-      Future.microtask(
-        () => ref.read(unitProvider.notifier).loadUnitsForBuilding(building.id),
-      );
-    }
-
     return InkWell(
       onTap: () {
         Navigator.push(
@@ -277,11 +267,41 @@ class _BuildingCard extends ConsumerWidget {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 4),
                   Text(
-                    '${building.address} - ${units.length} Apartamentos',
-                    style: const TextStyle(color: Colors.white54, fontSize: 14),
+                    building.address,
+                    style: const TextStyle(color: Colors.white38, fontSize: 13),
                   ),
+                  const SizedBox(height: 10),
+                  ref
+                      .watch(buildingOccupancyProvider(building.id))
+                      .when(
+                        data: (occ) {
+                          final total = occ['total'] ?? 0;
+                          final rented = occ['rented'] ?? 0;
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '$total Apartamentos',
+                                style: const TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              Text(
+                                '$rented Alquilados',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                        loading: () => const SizedBox.shrink(),
+                        error: (_, __) => const SizedBox.shrink(),
+                      ),
                 ],
               ),
             ),

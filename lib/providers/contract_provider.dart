@@ -20,11 +20,16 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
     }
   }
 
-  Future<void> addContract(Contract contract, WidgetRef ref) async {
+  Future<void> addContract(
+    Contract contract,
+    String buildingId,
+    WidgetRef ref,
+  ) async {
     await _dbHelper.insertContract(contract);
     await loadActiveContractForUnit(contract.unitId);
     ref.invalidate(dashboardStatsProvider);
     ref.invalidate(activeTenantsProvider);
+    ref.invalidate(buildingOccupancyProvider(buildingId));
   }
 
   Future<void> terminateContract(
@@ -41,6 +46,7 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
     ref.invalidate(unitStatusProvider(unitId));
     ref.invalidate(dashboardStatsProvider);
     ref.invalidate(activeTenantsProvider);
+    ref.invalidate(buildingOccupancyProvider(buildingId));
   }
 
   Future<void> _checkAndGenerateMonthlyPayment(Contract contract) async {
@@ -56,10 +62,20 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
     while (checkDate.isBefore(now) ||
         (checkDate.year == now.year && checkDate.month == now.month)) {
       // Un pago de un mes X se genera si ya llegamos al día pactado en ese mes
+      // Si el contrato empezó un 31 y el mes tiene 28, usamos el 28.
+      final lastDayOfMonth = DateTime(
+        checkDate.year,
+        checkDate.month + 1,
+        0,
+      ).day;
+      final dayToUse = contract.startDate.day > lastDayOfMonth
+          ? lastDayOfMonth
+          : contract.startDate.day;
+
       final generationDate = DateTime(
         checkDate.year,
         checkDate.month,
-        contract.startDate.day,
+        dayToUse,
       );
 
       if (now.isAfter(generationDate) || now.isAtSameMomentAs(generationDate)) {
@@ -71,10 +87,19 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
 
         if (existingPayment == null) {
           // La fecha límite es el mismo día del SIGUIENTE mes (pago a mes vencido)
+          final lastDayOfNextMonth = DateTime(
+            checkDate.year,
+            checkDate.month + 2,
+            0,
+          ).day;
+          final dayToUseNext = contract.startDate.day > lastDayOfNextMonth
+              ? lastDayOfNextMonth
+              : contract.startDate.day;
+
           final dueDate = DateTime(
             checkDate.year,
             checkDate.month + 1,
-            contract.startDate.day,
+            dayToUseNext,
           );
 
           final payment = MonthlyPayment(

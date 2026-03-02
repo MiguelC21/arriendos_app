@@ -17,6 +17,7 @@ class UnitNotifier extends StateNotifier<Map<String, List<Unit>>> {
     await _dbHelper.insertUnit(unit);
     await loadUnitsForBuilding(unit.buildingId);
     ref.invalidate(buildingDebtProvider(unit.buildingId));
+    ref.invalidate(buildingOccupancyProvider(unit.buildingId));
   }
 
   Future<void> updateUnit(Unit unit, WidgetRef ref) async {
@@ -24,6 +25,7 @@ class UnitNotifier extends StateNotifier<Map<String, List<Unit>>> {
     await loadUnitsForBuilding(unit.buildingId);
     ref.invalidate(buildingDebtProvider(unit.buildingId));
     ref.invalidate(unitStatusProvider(unit.id));
+    ref.invalidate(buildingOccupancyProvider(unit.buildingId));
   }
 
   Future<void> deleteUnit(
@@ -34,6 +36,7 @@ class UnitNotifier extends StateNotifier<Map<String, List<Unit>>> {
     await _dbHelper.deleteUnit(unitId);
     await loadUnitsForBuilding(buildingId);
     ref.invalidate(buildingDebtProvider(buildingId));
+    ref.invalidate(buildingOccupancyProvider(buildingId));
   }
 }
 

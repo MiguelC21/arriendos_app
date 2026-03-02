@@ -288,7 +288,9 @@ class _UnitDetailScreenState extends ConsumerState<UnitDetailScreen> {
                           double.tryParse(valueController.text) ??
                           widget.unit.baseValue,
                     );
-                    ref.read(contractProvider.notifier).addContract(c, ref);
+                    ref
+                        .read(contractProvider.notifier)
+                        .addContract(c, widget.unit.buildingId, ref);
                     Navigator.pop(context);
                   }
                 },
