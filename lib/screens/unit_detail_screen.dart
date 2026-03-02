@@ -6,6 +6,7 @@ import '../models/contract.dart';
 import '../providers/contract_provider.dart';
 import '../providers/payment_provider.dart';
 import '../providers/building_stats_provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class UnitDetailScreen extends ConsumerStatefulWidget {
   final Unit unit;
@@ -164,9 +165,26 @@ class _UnitDetailScreenState extends ConsumerState<UnitDetailScreen> {
                   ),
                   if (contract != null) ...[
                     const SizedBox(height: 5),
-                    Text(
-                      '📞 Tel: ${contract.phone}',
-                      style: const TextStyle(color: Colors.white54),
+                    Row(
+                      children: [
+                        Text(
+                          '📞 Tel: ${contract.phone}',
+                          style: const TextStyle(color: Colors.white54),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.chat_bubble_outline_rounded,
+                            size: 18,
+                            color: Color(0xFF25D366),
+                          ),
+                          onPressed: () => _launchWhatsApp(contract.phone),
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          tooltip: 'Enviar WhatsApp',
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 20),
                     ElevatedButton(
@@ -241,6 +259,25 @@ class _UnitDetailScreenState extends ConsumerState<UnitDetailScreen> {
             )
           : null,
     );
+  }
+
+  Future<void> _launchWhatsApp(String phone) async {
+    final cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
+    // Asumimos código de país Colombia (+57) si no tiene suficientes dígitos
+    final formattedPhone = cleanPhone.length == 10
+        ? '57$cleanPhone'
+        : cleanPhone;
+    final url = Uri.parse('whatsapp://send?phone=$formattedPhone');
+
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalNonBrowserApplication);
+    } else {
+      // Si no puede abrir whatsapp://, intentar con la web como respaldo
+      final webUrl = Uri.parse('https://wa.me/$formattedPhone');
+      if (await canLaunchUrl(webUrl)) {
+        await launchUrl(webUrl, mode: LaunchMode.externalApplication);
+      }
+    }
   }
 
   void _showAddContractDialog(BuildContext context, WidgetRef ref) {
@@ -839,7 +876,7 @@ class _StatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
+        color: color.withOpacity(0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(

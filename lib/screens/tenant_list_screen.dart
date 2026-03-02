@@ -5,7 +5,8 @@ import '../providers/tenant_provider.dart';
 import '../providers/building_stats_provider.dart';
 import 'unit_detail_screen.dart';
 import '../services/database_helper.dart';
-import '../models/unit.dart';
+import '../models/unit.dart'; // Added this import
+import 'package:url_launcher/url_launcher.dart';
 
 class TenantListScreen extends ConsumerWidget {
   const TenantListScreen({super.key});
@@ -81,12 +82,25 @@ class TenantListScreen extends ConsumerWidget {
                         ),
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        '📞 ${tenant.phone}',
-                        style: const TextStyle(
-                          color: Colors.white38,
-                          fontSize: 13,
-                        ),
+                      Row(
+                        children: [
+                          Text(
+                            '📞 ${tenant.phone}',
+                            style: const TextStyle(
+                              color: Colors.white38,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () => _launchWhatsApp(tenant.phone),
+                            child: const Icon(
+                              Icons.chat_bubble_outline_rounded,
+                              size: 14,
+                              color: Color(0xFF25D366),
+                            ),
+                          ),
+                        ],
                       ),
                       ref
                           .watch(unitDebtProvider(tenant.unitId))
@@ -142,5 +156,20 @@ class TenantListScreen extends ConsumerWidget {
         error: (e, s) => Center(child: Text('Error: $e')),
       ),
     );
+  }
+
+  Future<void> _launchWhatsApp(String phone) async {
+    final cleanPhone = phone.replaceAll(RegExp(r'\D'), '');
+    final formattedPhone = cleanPhone.length == 10
+        ? '57$cleanPhone'
+        : cleanPhone;
+    final url = Uri.parse('whatsapp://send?phone=$formattedPhone');
+
+    if (await canLaunchUrl(url)) {
+      await launchUrl(url, mode: LaunchMode.externalNonBrowserApplication);
+    } else {
+      final webUrl = Uri.parse('https://wa.me/$formattedPhone');
+      await launchUrl(webUrl, mode: LaunchMode.externalApplication);
+    }
   }
 }
