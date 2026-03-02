@@ -196,7 +196,7 @@ class _BuildingDetailScreenState extends ConsumerState<BuildingDetailScreen> {
             TextField(
               controller: numberController,
               decoration: const InputDecoration(
-                labelText: 'Número (Ej: Apto 102)',
+                labelText: 'Número (Ej: Apartamento 102)',
               ),
             ),
             TextField(
@@ -308,7 +308,7 @@ class _UnitCard extends ConsumerWidget {
                                   strokeWidth: 2,
                                 ),
                               ),
-                              error: (_, __) => const Icon(
+                              error: (_, _) => const Icon(
                                 Icons.error,
                                 size: 12,
                                 color: Colors.red,
@@ -393,7 +393,7 @@ class _UnitCard extends ConsumerWidget {
             TextField(
               controller: numberController,
               decoration: const InputDecoration(
-                labelText: 'Número (Ej: Apto 102)',
+                labelText: 'Número (Ej: Apartamento 102)',
               ),
             ),
             TextField(
@@ -475,7 +475,7 @@ class _StatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(

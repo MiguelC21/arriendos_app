@@ -52,7 +52,7 @@ class TenantListScreen extends ConsumerWidget {
                   leading: CircleAvatar(
                     backgroundColor: Theme.of(
                       context,
-                    ).colorScheme.primary.withOpacity(0.1),
+                    ).colorScheme.primary.withValues(alpha: 0.1),
                     child: Text(
                       tenant.name[0].toUpperCase(),
                       style: TextStyle(
@@ -72,7 +72,7 @@ class TenantListScreen extends ConsumerWidget {
                     children: [
                       const SizedBox(height: 4),
                       Text(
-                        '🏢 ${tenant.buildingName} - Apto ${tenant.unitNumber}',
+                        '🏢 ${tenant.buildingName} - Apartamento ${tenant.unitNumber}',
                         style: const TextStyle(
                           color: Colors.white54,
                           fontSize: 13,

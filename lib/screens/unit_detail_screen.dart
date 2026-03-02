@@ -37,7 +37,7 @@ class _UnitDetailScreenState extends ConsumerState<UnitDetailScreen> {
     );
 
     return Scaffold(
-      appBar: AppBar(title: Text('Apto ${widget.unit.number}')),
+      appBar: AppBar(title: Text('Apartamento ${widget.unit.number}')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         child: Column(
@@ -96,7 +96,7 @@ class _UnitDetailScreenState extends ConsumerState<UnitDetailScreen> {
                           height: 10,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         ),
-                        error: (_, __) => const Text(
+                        error: (_, _) => const Text(
                           'Error al cargar estado',
                           style: TextStyle(color: Colors.red),
                         ),
@@ -138,6 +138,7 @@ class _UnitDetailScreenState extends ConsumerState<UnitDetailScreen> {
                                         widget.unit.buildingId,
                                         ref,
                                       );
+                                  if (!context.mounted) return;
                                   Navigator.pop(context); // Cerrar diálogo
                                 },
                                 child: const Text(
@@ -343,22 +344,6 @@ class _UnitDetailScreenState extends ConsumerState<UnitDetailScreen> {
               keyboardType: TextInputType.number,
             ),
             const SizedBox(height: 15),
-            const Text(
-              'Método de Pago:',
-              style: TextStyle(color: Colors.white70),
-            ),
-            const SizedBox(height: 10),
-            DropdownButton<String>(
-              isExpanded: true,
-              value: 'Efectivo',
-              dropdownColor: const Color(0xFF1E293B),
-              items: [
-                'Efectivo',
-                'Transferencia',
-                'Nequi/Daviplata',
-              ].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-              onChanged: (v) {},
-            ),
             const SizedBox(height: 30),
             ElevatedButton(
               onPressed: () async {
@@ -374,6 +359,7 @@ class _UnitDetailScreenState extends ConsumerState<UnitDetailScreen> {
                         unitId: widget.unit.id,
                         ref: ref,
                       );
+                  if (!context.mounted) return;
                   Navigator.pop(context);
                 }
               },
@@ -406,11 +392,12 @@ class _PaymentHistoryList extends ConsumerWidget {
       decimalDigits: 0,
     );
 
-    if (payments.isEmpty)
+    if (payments.isEmpty) {
       return const Text(
         'Generando primer cobro...',
         style: TextStyle(color: Colors.white54),
       );
+    }
 
     return ListView.builder(
       shrinkWrap: true,
@@ -494,7 +481,7 @@ class _StatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
