@@ -49,6 +49,7 @@ class PaymentNotifier extends StateNotifier<List<MonthlyPayment>> {
     ref.invalidate(buildingDebtProvider(buildingId));
     ref.invalidate(unitStatusProvider(unitId));
     ref.invalidate(unitDebtProvider(unitId));
+    ref.invalidate(abonosProvider);
   }
 }
 
@@ -56,3 +57,10 @@ final paymentProvider =
     StateNotifierProvider<PaymentNotifier, List<MonthlyPayment>>((ref) {
       return PaymentNotifier(DatabaseHelper());
     });
+
+final abonosProvider = FutureProvider.family<List<Abono>, String>((
+  ref,
+  paymentId,
+) async {
+  return await DatabaseHelper().getAbonosForPayment(paymentId);
+});

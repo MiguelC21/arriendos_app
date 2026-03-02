@@ -677,29 +677,119 @@ class _PaymentHistoryList extends ConsumerWidget {
 
         return Container(
           margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(15),
           decoration: BoxDecoration(
             color: const Color(0xFF1E293B),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '$monthName ${p.year}',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    '${currencyFormat.format(p.paidValue)} / ${currencyFormat.format(p.totalValue)}',
-                    style: const TextStyle(color: Colors.white54, fontSize: 13),
-                  ),
-                ],
+          child: Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              tilePadding: const EdgeInsets.symmetric(
+                horizontal: 15,
+                vertical: 5,
               ),
-              _StatusBadge(status: p.status.name),
-            ],
+              title: Text(
+                '$monthName ${p.year}',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              subtitle: Text(
+                '${currencyFormat.format(p.paidValue)} / ${currencyFormat.format(p.totalValue)}',
+                style: const TextStyle(color: Colors.white54, fontSize: 13),
+              ),
+              trailing: _StatusBadge(status: p.status.name),
+              children: [
+                Consumer(
+                  builder: (context, ref, child) {
+                    final abonosAsync = ref.watch(abonosProvider(p.id));
+                    return abonosAsync.when(
+                      data: (abonos) {
+                        if (abonos.isEmpty) {
+                          return const Padding(
+                            padding: EdgeInsets.all(15),
+                            child: Text(
+                              'Sin abonos registrados',
+                              style: TextStyle(
+                                color: Colors.white38,
+                                fontSize: 12,
+                              ),
+                            ),
+                          );
+                        }
+                        return Column(
+                          children: [
+                            const Divider(
+                              height: 1,
+                              color: Colors.white12,
+                              indent: 15,
+                              endIndent: 15,
+                            ),
+                            ...abonos.map((a) {
+                              final fullDateTime = DateFormat(
+                                "EEEE d 'de' MMMM, yyyy - hh:mm a",
+                                'es_ES',
+                              ).format(a.date);
+                              return ListTile(
+                                dense: true,
+                                leading: const Icon(
+                                  Icons.receipt_long_outlined,
+                                  size: 18,
+                                  color: Color(0xFF38BDF8),
+                                ),
+                                title: Text(
+                                  'Abono: ${currencyFormat.format(a.value)}',
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  'Fecha: ${fullDateTime[0].toUpperCase()}${fullDateTime.substring(1)}',
+                                  style: const TextStyle(
+                                    color: Colors.white38,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                trailing: Text(
+                                  a.method,
+                                  style: const TextStyle(
+                                    color: Colors.white24,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              );
+                            }),
+                            const SizedBox(height: 10),
+                          ],
+                        );
+                      },
+                      loading: () => const Padding(
+                        padding: EdgeInsets.all(15),
+                        child: Center(
+                          child: SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                      ),
+                      error: (err, _) => Padding(
+                        padding: const EdgeInsets.all(15),
+                        child: Text(
+                          'Error al cargar abonos',
+                          style: TextStyle(
+                            color: Colors.redAccent.shade100,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
         );
       },
