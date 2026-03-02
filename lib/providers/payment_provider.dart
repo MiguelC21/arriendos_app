@@ -44,6 +44,18 @@ class PaymentNotifier extends StateNotifier<List<MonthlyPayment>> {
     _invalidateStats(ref, buildingId, unitId);
   }
 
+  Future<void> deleteAbono({
+    required String abonoId,
+    required String contractId,
+    required String buildingId,
+    required String unitId,
+    required WidgetRef ref,
+  }) async {
+    await _dbHelper.deleteAbono(abonoId);
+    await loadPaymentsForContract(contractId);
+    _invalidateStats(ref, buildingId, unitId);
+  }
+
   void _invalidateStats(ref, String buildingId, String unitId) {
     ref.invalidate(dashboardStatsProvider);
     ref.invalidate(buildingDebtProvider(buildingId));

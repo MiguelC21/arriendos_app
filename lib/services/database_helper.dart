@@ -329,4 +329,41 @@ class DatabaseHelper {
       }
     });
   }
+
+  Future<int> deleteAbono(String abonoId) async {
+    final db = await database;
+    return await db.transaction((txn) async {
+      // 1. Obtener datos del abono para saber cuánto restar y de qué pago
+      final List<Map<String, dynamic>> maps = await txn.query(
+        'abonos',
+        where: 'id = ?',
+        whereArgs: [abonoId],
+      );
+
+      if (maps.isEmpty) return 0;
+      final abono = maps.first;
+      final paymentId = abono['pagoId'] as String;
+      final value = abono['valor'] as double;
+
+      // 2. Borrar el abono
+      await txn.delete('abonos', where: 'id = ?', whereArgs: [abonoId]);
+
+      // 3. Actualizar el pago mensual
+      await txn.execute(
+        '''
+        UPDATE monthly_payments 
+        SET valorPagado = valorPagado - ?,
+            estado = CASE 
+              WHEN (valorPagado - ?) <= 0 THEN 'mora'
+              WHEN (valorPagado - ?) < valorTotal THEN 'parcial'
+              ELSE 'pagado'
+            END
+        WHERE id = ?
+      ''',
+        [value, value, value, paymentId],
+      );
+
+      return 1;
+    });
+  }
 }

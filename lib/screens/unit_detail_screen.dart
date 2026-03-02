@@ -245,8 +245,7 @@ class _UnitDetailScreenState extends ConsumerState<UnitDetailScreen> {
                 'Historial de Pagos',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 15),
-              _PaymentHistoryList(contract: contract),
+              _PaymentHistoryList(contract: contract, unit: widget.unit),
             ],
           ],
         ),
@@ -680,7 +679,8 @@ class _AbonoDialogContentState extends State<_AbonoDialogContent> {
 
 class _PaymentHistoryList extends ConsumerWidget {
   final Contract contract;
-  const _PaymentHistoryList({required this.contract});
+  final Unit unit;
+  const _PaymentHistoryList({required this.contract, required this.unit});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -789,12 +789,61 @@ class _PaymentHistoryList extends ConsumerWidget {
                                     fontSize: 12,
                                   ),
                                 ),
-                                trailing: Text(
-                                  a.method,
-                                  style: const TextStyle(
-                                    color: Colors.white24,
-                                    fontSize: 11,
+                                trailing: IconButton(
+                                  icon: const Icon(
+                                    Icons.delete_outline_rounded,
+                                    size: 18,
+                                    color: Colors.redAccent,
                                   ),
+                                  onPressed: () {
+                                    showDialog(
+                                      context: context,
+                                      builder: (context) => AlertDialog(
+                                        backgroundColor: const Color(
+                                          0xFF1E293B,
+                                        ),
+                                        title: const Text(
+                                          '¿Deshacer Pago?',
+                                          style: TextStyle(color: Colors.white),
+                                        ),
+                                        content: const Text(
+                                          'Esta acción eliminará el abono y ajustará el saldo pendiente del mes. ¿Deseas continuar?',
+                                          style: TextStyle(
+                                            color: Colors.white70,
+                                          ),
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () =>
+                                                Navigator.pop(context),
+                                            child: const Text('Cancelar'),
+                                          ),
+                                          TextButton(
+                                            onPressed: () async {
+                                              Navigator.pop(context);
+                                              await ref
+                                                  .read(
+                                                    paymentProvider.notifier,
+                                                  )
+                                                  .deleteAbono(
+                                                    abonoId: a.id,
+                                                    contractId: p.contractId,
+                                                    buildingId: unit.buildingId,
+                                                    unitId: unit.id,
+                                                    ref: ref,
+                                                  );
+                                            },
+                                            child: const Text(
+                                              'Eliminar',
+                                              style: TextStyle(
+                                                color: Colors.redAccent,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
                                 ),
                               );
                             }),
@@ -876,7 +925,7 @@ class _StatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text(
