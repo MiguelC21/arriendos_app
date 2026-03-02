@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../models/building.dart';
@@ -7,6 +8,7 @@ import '../providers/unit_provider.dart';
 import '../providers/contract_provider.dart';
 import '../providers/building_stats_provider.dart';
 import 'unit_detail_screen.dart';
+import '../utils/formatters.dart';
 
 class BuildingDetailScreen extends ConsumerStatefulWidget {
   final Building building;
@@ -211,6 +213,7 @@ class _BuildingDetailScreenState extends ConsumerState<BuildingDetailScreen> {
                 labelText: 'Valor Arriendo Base',
               ),
               keyboardType: TextInputType.number,
+              inputFormatters: [CurrencyInputFormatter()],
             ),
             const SizedBox(height: 30),
             ElevatedButton(
@@ -219,7 +222,11 @@ class _BuildingDetailScreenState extends ConsumerState<BuildingDetailScreen> {
                   final u = Unit(
                     buildingId: widget.building.id,
                     number: numberController.text,
-                    baseValue: double.tryParse(valueController.text) ?? 0.0,
+                    baseValue:
+                        double.tryParse(
+                          valueController.text.replaceAll('.', ''),
+                        ) ??
+                        0.0,
                   );
                   ref.read(unitProvider.notifier).addUnit(u, ref);
                   Navigator.pop(context);
@@ -428,6 +435,7 @@ class _UnitCard extends ConsumerWidget {
                 labelText: 'Valor Arriendo Base',
               ),
               keyboardType: TextInputType.number,
+              inputFormatters: [CurrencyInputFormatter()],
             ),
             const SizedBox(height: 30),
             ElevatedButton(
@@ -437,7 +445,11 @@ class _UnitCard extends ConsumerWidget {
                     id: unit.id,
                     buildingId: unit.buildingId,
                     number: numberController.text,
-                    baseValue: double.tryParse(valueController.text) ?? 0.0,
+                    baseValue:
+                        double.tryParse(
+                          valueController.text.replaceAll('.', ''),
+                        ) ??
+                        0.0,
                   );
                   ref.read(unitProvider.notifier).updateUnit(updatedUnit, ref);
                   Navigator.pop(context);

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../models/unit.dart';
@@ -7,6 +8,7 @@ import '../providers/contract_provider.dart';
 import '../providers/payment_provider.dart';
 import '../providers/building_stats_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../utils/formatters.dart';
 
 class UnitDetailScreen extends ConsumerStatefulWidget {
   final Unit unit;
@@ -394,6 +396,7 @@ class _ContractDialogContentState extends State<_ContractDialogContent> {
           TextField(
             controller: widget.nameController,
             decoration: const InputDecoration(labelText: 'Nombre Inquilino'),
+            textCapitalization: TextCapitalization.words,
             enabled: !_isLoading,
           ),
           TextField(
@@ -406,6 +409,7 @@ class _ContractDialogContentState extends State<_ContractDialogContent> {
             controller: widget.valueController,
             decoration: const InputDecoration(labelText: 'Valor Mensual'),
             keyboardType: TextInputType.number,
+            inputFormatters: [CurrencyInputFormatter()],
             enabled: !_isLoading,
           ),
           const SizedBox(height: 20),
@@ -452,17 +456,22 @@ class _ContractDialogContentState extends State<_ContractDialogContent> {
               onPressed: _isLoading
                   ? null
                   : () async {
-                      if (widget.nameController.text.isNotEmpty) {
+                      if (widget.nameController.text.isNotEmpty &&
+                          widget.valueController.text.isNotEmpty) {
                         setState(() => _isLoading = true);
                         try {
+                          final contractValue =
+                              double.tryParse(
+                                widget.valueController.text.replaceAll('.', ''),
+                              ) ??
+                              widget.unit.baseValue;
+
                           final c = Contract(
                             unitId: widget.unit.id,
                             tenantName: widget.nameController.text,
                             phone: widget.phoneController.text,
                             startDate: widget.selectedDate,
-                            contractValue:
-                                double.tryParse(widget.valueController.text) ??
-                                widget.unit.baseValue,
+                            contractValue: contractValue,
                           );
                           await widget.ref
                               .read(contractProvider.notifier)
@@ -566,7 +575,8 @@ class _AbonoDialogContentState extends State<_AbonoDialogContent> {
     );
 
     final currentDebt = debtAsync.asData?.value ?? 0.0;
-    final inputAmount = double.tryParse(_amountController.text) ?? 0.0;
+    final inputAmount =
+        double.tryParse(_amountController.text.replaceAll('.', '')) ?? 0.0;
     final isOverLimit = inputAmount > currentDebt;
     final isInvalid = inputAmount <= 0;
 
@@ -608,6 +618,7 @@ class _AbonoDialogContentState extends State<_AbonoDialogContent> {
                   : null,
             ),
             keyboardType: TextInputType.number,
+            inputFormatters: [CurrencyInputFormatter()],
             enabled: !_isLoading,
           ),
           const SizedBox(height: 15),
@@ -736,7 +747,11 @@ class _PaymentHistoryList extends ConsumerWidget {
                 '${currencyFormat.format(p.paidValue)} / ${currencyFormat.format(p.totalValue)}',
                 style: const TextStyle(color: Colors.white54, fontSize: 13),
               ),
-              trailing: _StatusBadge(status: p.status.name),
+              trailing: _StatusBadge(
+                status: p.status.name,
+                month: p.month,
+                year: p.year,
+              ),
               children: [
                 Consumer(
                   builder: (context, ref, child) {
@@ -904,10 +919,21 @@ class _PaymentHistoryList extends ConsumerWidget {
 
 class _StatusBadge extends StatelessWidget {
   final String status;
-  const _StatusBadge({required this.status});
+  final int month;
+  final int year;
+
+  const _StatusBadge({
+    required this.status,
+    required this.month,
+    required this.year,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final isPastMonth =
+        year < now.year || (year == now.year && month < now.month);
+
     Color color = Colors.orange;
     String label = 'Pendiente';
 
@@ -915,11 +941,14 @@ class _StatusBadge extends StatelessWidget {
       color = Colors.green;
       label = 'Pagado';
     } else if (status == 'parcial') {
-      color = Colors.blue;
+      color = isPastMonth ? Colors.redAccent : Colors.blue;
       label = 'Parcial';
-    } else if (status == 'mora') {
+    } else if (status == 'mora' || (isPastMonth && status == 'pendiente')) {
       color = Colors.redAccent;
-      label = 'Mora';
+      label = status == 'mora' ? 'Mora' : 'Pendiente';
+    } else if (status == 'pendiente') {
+      color = Colors.orange;
+      label = 'Pendiente';
     }
 
     return Container(
@@ -991,6 +1020,7 @@ class _EditTenantDialogContentState extends State<_EditTenantDialogContent> {
           TextField(
             controller: _nameController,
             decoration: const InputDecoration(labelText: 'Nombre Completo'),
+            textCapitalization: TextCapitalization.words,
             enabled: !_isLoading,
           ),
           const SizedBox(height: 10),
