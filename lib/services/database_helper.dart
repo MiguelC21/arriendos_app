@@ -26,6 +26,13 @@ class DatabaseHelper {
     return await openDatabase(path, version: 1, onCreate: _onCreate);
   }
 
+  Future<void> closeDatabase() async {
+    if (_database != null) {
+      await _database!.close();
+      _database = null;
+    }
+  }
+
   Future<void> _onCreate(Database db, int version) async {
     // 🏠 INMUEBLES
     await db.execute('''

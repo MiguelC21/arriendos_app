@@ -6,6 +6,7 @@ import '../providers/dashboard_provider.dart';
 import '../models/building.dart';
 import 'building_detail_screen.dart';
 import 'tenant_list_screen.dart';
+import 'settings_screen.dart';
 import '../providers/building_stats_provider.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -28,6 +29,15 @@ class DashboardScreen extends ConsumerWidget {
           IconButton(
             onPressed: () => ref.invalidate(dashboardStatsProvider),
             icon: const Icon(Icons.refresh_rounded),
+          ),
+          IconButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+              );
+            },
+            icon: const Icon(Icons.settings_outlined),
           ),
         ],
       ),
