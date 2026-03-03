@@ -637,11 +637,12 @@ class _AbonoDialogContentState extends State<_AbonoDialogContent> {
                         setState(() => _isLoading = true);
                         try {
                           await widget.ref
-                              .read(paymentProvider.notifier)
+                              .read(
+                                paymentProvider(widget.contract.id).notifier,
+                              )
                               .applyCascadingPayment(
                                 totalAmount: inputAmount,
                                 method: 'Efectivo',
-                                contractId: widget.contract.id,
                                 buildingId: widget.unit.buildingId,
                                 unitId: widget.unit.id,
                                 ref: widget.ref,
@@ -699,205 +700,222 @@ class _PaymentHistoryList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Cargar historial
-    Future.microtask(
-      () => ref
-          .read(paymentProvider.notifier)
-          .loadPaymentsForContract(contract.id),
-    );
-    final payments = ref.watch(paymentProvider);
+    final paymentsAsync = ref.watch(paymentProvider(contract.id));
     final currencyFormat = NumberFormat.currency(
       locale: 'es_CO',
       symbol: '\$',
       decimalDigits: 0,
     );
 
-    if (payments.isEmpty) {
-      return const Text(
-        'Generando primer cobro...',
-        style: TextStyle(color: Colors.white54),
-      );
-    }
+    return paymentsAsync.when(
+      data: (payments) {
+        if (payments.isEmpty) {
+          return const Text(
+            'Sin historial de pagos.',
+            style: TextStyle(color: Colors.white54),
+          );
+        }
+        return ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: payments.length,
+          itemBuilder: (context, index) {
+            final p = payments[index];
+            final monthName = _getMonthName(p.month);
 
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: payments.length,
-      itemBuilder: (context, index) {
-        final p = payments[index];
-        final monthName = _getMonthName(p.month);
-
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1E293B),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Theme(
-            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-            child: ExpansionTile(
-              tilePadding: const EdgeInsets.symmetric(
-                horizontal: 15,
-                vertical: 5,
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E293B),
+                borderRadius: BorderRadius.circular(12),
               ),
-              title: Text(
-                '$monthName ${p.year}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              subtitle: Text(
-                '${currencyFormat.format(p.paidValue)} / ${currencyFormat.format(p.totalValue)}',
-                style: const TextStyle(color: Colors.white54, fontSize: 13),
-              ),
-              trailing: _StatusBadge(
-                status: p.status.name,
-                month: p.month,
-                year: p.year,
-              ),
-              children: [
-                Consumer(
-                  builder: (context, ref, child) {
-                    final abonosAsync = ref.watch(abonosProvider(p.id));
-                    return abonosAsync.when(
-                      data: (abonos) {
-                        if (abonos.isEmpty) {
-                          return const Padding(
-                            padding: EdgeInsets.all(15),
-                            child: Text(
-                              'Sin abonos registrados',
-                              style: TextStyle(
-                                color: Colors.white38,
-                                fontSize: 12,
-                              ),
-                            ),
-                          );
-                        }
-                        return Column(
-                          children: [
-                            const Divider(
-                              height: 1,
-                              color: Colors.white12,
-                              indent: 15,
-                              endIndent: 15,
-                            ),
-                            ...abonos.map((a) {
-                              final fullDateTime = DateFormat(
-                                "EEEE d 'de' MMMM, yyyy - hh:mm a",
-                                'es_ES',
-                              ).format(a.date);
-                              return ListTile(
-                                dense: true,
-                                leading: const Icon(
-                                  Icons.receipt_long_outlined,
-                                  size: 18,
-                                  color: Color(0xFF38BDF8),
-                                ),
-                                title: Text(
-                                  'Abono: ${currencyFormat.format(a.value)}',
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                subtitle: Text(
-                                  'Fecha: ${fullDateTime[0].toUpperCase()}${fullDateTime.substring(1)}',
-                                  style: const TextStyle(
+              child: Theme(
+                data: Theme.of(
+                  context,
+                ).copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  tilePadding: const EdgeInsets.symmetric(
+                    horizontal: 15,
+                    vertical: 5,
+                  ),
+                  title: Text(
+                    '$monthName ${p.year}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  subtitle: Text(
+                    '${currencyFormat.format(p.paidValue)} / ${currencyFormat.format(p.totalValue)}',
+                    style: const TextStyle(color: Colors.white54, fontSize: 13),
+                  ),
+                  trailing: _StatusBadge(
+                    status: p.status.name,
+                    month: p.month,
+                    year: p.year,
+                  ),
+                  children: [
+                    Consumer(
+                      builder: (context, ref, child) {
+                        final abonosAsync = ref.watch(abonosProvider(p.id));
+                        return abonosAsync.when(
+                          data: (abonos) {
+                            if (abonos.isEmpty) {
+                              return const Padding(
+                                padding: EdgeInsets.all(15),
+                                child: Text(
+                                  'Sin abonos registrados',
+                                  style: TextStyle(
                                     color: Colors.white38,
                                     fontSize: 12,
                                   ),
                                 ),
-                                trailing: IconButton(
-                                  icon: const Icon(
-                                    Icons.delete_outline_rounded,
-                                    size: 18,
-                                    color: Colors.redAccent,
-                                  ),
-                                  onPressed: () {
-                                    showDialog(
-                                      context: context,
-                                      builder: (context) => AlertDialog(
-                                        backgroundColor: const Color(
-                                          0xFF1E293B,
-                                        ),
-                                        title: const Text(
-                                          '¿Deshacer Pago?',
-                                          style: TextStyle(color: Colors.white),
-                                        ),
-                                        content: const Text(
-                                          'Esta acción eliminará el abono y ajustará el saldo pendiente del mes. ¿Deseas continuar?',
-                                          style: TextStyle(
-                                            color: Colors.white70,
-                                          ),
-                                        ),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () =>
-                                                Navigator.pop(context),
-                                            child: const Text('Cancelar'),
-                                          ),
-                                          TextButton(
-                                            onPressed: () async {
-                                              Navigator.pop(context);
-                                              await ref
-                                                  .read(
-                                                    paymentProvider.notifier,
-                                                  )
-                                                  .deleteAbono(
-                                                    abonoId: a.id,
-                                                    contractId: p.contractId,
-                                                    buildingId: unit.buildingId,
-                                                    unitId: unit.id,
-                                                    ref: ref,
-                                                  );
-                                            },
-                                            child: const Text(
-                                              'Eliminar',
+                              );
+                            }
+                            return Column(
+                              children: [
+                                const Divider(
+                                  height: 1,
+                                  color: Colors.white12,
+                                  indent: 15,
+                                  endIndent: 15,
+                                ),
+                                ...abonos.map((a) {
+                                  final fullDateTime = DateFormat(
+                                    "EEEE d 'de' MMMM, yyyy - hh:mm a",
+                                    'es_ES',
+                                  ).format(a.date);
+                                  return ListTile(
+                                    dense: true,
+                                    leading: const Icon(
+                                      Icons.receipt_long_outlined,
+                                      size: 18,
+                                      color: Color(0xFF38BDF8),
+                                    ),
+                                    title: Text(
+                                      'Abono: ${currencyFormat.format(a.value)}',
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    subtitle: Text(
+                                      'Fecha: ${fullDateTime[0].toUpperCase()}${fullDateTime.substring(1)}',
+                                      style: const TextStyle(
+                                        color: Colors.white38,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    trailing: IconButton(
+                                      icon: const Icon(
+                                        Icons.delete_outline_rounded,
+                                        size: 18,
+                                        color: Colors.redAccent,
+                                      ),
+                                      onPressed: () {
+                                        showDialog(
+                                          context: context,
+                                          builder: (context) => AlertDialog(
+                                            backgroundColor: const Color(
+                                              0xFF1E293B,
+                                            ),
+                                            title: const Text(
+                                              '¿Deshacer Pago?',
                                               style: TextStyle(
-                                                color: Colors.redAccent,
+                                                color: Colors.white,
                                               ),
                                             ),
+                                            content: const Text(
+                                              'Esta acción eliminará el abono y ajustará el saldo pendiente del mes. ¿Deseas continuar?',
+                                              style: TextStyle(
+                                                color: Colors.white70,
+                                              ),
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () =>
+                                                    Navigator.pop(context),
+                                                child: const Text('Cancelar'),
+                                              ),
+                                              TextButton(
+                                                onPressed: () async {
+                                                  Navigator.pop(context);
+                                                  await ref
+                                                      .read(
+                                                        paymentProvider(
+                                                          p.contractId,
+                                                        ).notifier,
+                                                      )
+                                                      .deleteAbono(
+                                                        abonoId: a.id,
+                                                        buildingId:
+                                                            unit.buildingId,
+                                                        unitId: unit.id,
+                                                        ref: ref,
+                                                      );
+                                                },
+                                                child: const Text(
+                                                  'Eliminar',
+                                                  style: TextStyle(
+                                                    color: Colors.redAccent,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
                                           ),
-                                        ],
-                                      ),
-                                    );
-                                  },
+                                        );
+                                      },
+                                    ),
+                                  );
+                                }),
+                                const SizedBox(height: 10),
+                              ],
+                            );
+                          },
+                          loading: () => const Padding(
+                            padding: EdgeInsets.all(15),
+                            child: Center(
+                              child: SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
                                 ),
-                              );
-                            }),
-                            const SizedBox(height: 10),
-                          ],
+                              ),
+                            ),
+                          ),
+                          error: (err, _) => Padding(
+                            padding: const EdgeInsets.all(15),
+                            child: Text(
+                              'Error al cargar abonos',
+                              style: TextStyle(
+                                color: Colors.redAccent.shade100,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
                         );
                       },
-                      loading: () => const Padding(
-                        padding: EdgeInsets.all(15),
-                        child: Center(
-                          child: SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                        ),
-                      ),
-                      error: (err, _) => Padding(
-                        padding: const EdgeInsets.all(15),
-                        child: Text(
-                          'Error al cargar abonos',
-                          style: TextStyle(
-                            color: Colors.redAccent.shade100,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
+      loading: () => const Center(
+        child: Padding(
+          padding: EdgeInsets.all(30.0),
+          child: CircularProgressIndicator(),
+        ),
+      ),
+      error: (err, _) => Center(
+        child: Text(
+          'Error al cargar el historial: $err',
+          style: const TextStyle(color: Colors.redAccent),
+        ),
+      ),
     );
   }
 

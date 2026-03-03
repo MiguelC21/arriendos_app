@@ -68,6 +68,16 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
   Future<void> _checkAndGenerateMonthlyPayment(Contract contract) async {
     final now = DateTime.now();
 
+    // 1️⃣ Cargar todos los pagos existentes en UNA SOLA consulta
+    final existingPayments = await _dbHelper.getPaymentsForContract(
+      contract.id,
+    );
+    final Set<String> existingKeys = existingPayments
+        .map((p) => '${p.month}-${p.year}')
+        .toSet();
+
+    List<MonthlyPayment> paymentsToInsert = [];
+
     // Empezamos desde el mes de inicio del contrato
     DateTime checkDate = DateTime(
       contract.startDate.year,
@@ -77,31 +87,28 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
     // Mientras la fecha que revisamos no sea futura al mes actual
     while (checkDate.isBefore(now) ||
         (checkDate.year == now.year && checkDate.month == now.month)) {
-      // Un pago de un mes X se genera si ya llegamos al día pactado en ese mes
-      // Si el contrato empezó un 31 y el mes tiene 28, usamos el 28.
-      final lastDayOfMonth = DateTime(
-        checkDate.year,
-        checkDate.month + 1,
-        0,
-      ).day;
-      final dayToUse = contract.startDate.day > lastDayOfMonth
-          ? lastDayOfMonth
-          : contract.startDate.day;
+      final key = '${checkDate.month}-${checkDate.year}';
 
-      final generationDate = DateTime(
-        checkDate.year,
-        checkDate.month,
-        dayToUse,
-      );
-
-      if (now.isAfter(generationDate) || now.isAtSameMomentAs(generationDate)) {
-        final existingPayment = await _dbHelper.getPaymentForMonth(
-          contract.id,
-          checkDate.month,
+      if (!existingKeys.contains(key)) {
+        // Un pago de un mes X se genera si ya llegamos al día pactado en ese mes
+        // Si el contrato empezó un 31 y el mes tiene 28, usamos el 28.
+        final lastDayOfMonth = DateTime(
           checkDate.year,
+          checkDate.month + 1,
+          0,
+        ).day;
+        final dayToUse = contract.startDate.day > lastDayOfMonth
+            ? lastDayOfMonth
+            : contract.startDate.day;
+
+        final generationDate = DateTime(
+          checkDate.year,
+          checkDate.month,
+          dayToUse,
         );
 
-        if (existingPayment == null) {
+        if (now.isAfter(generationDate) ||
+            now.isAtSameMomentAs(generationDate)) {
           // La fecha límite es el mismo día del SIGUIENTE mes (pago a mes vencido)
           final lastDayOfNextMonth = DateTime(
             checkDate.year,
@@ -118,20 +125,26 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
             dayToUseNext,
           );
 
-          final payment = MonthlyPayment(
-            contractId: contract.id,
-            month: checkDate.month,
-            year: checkDate.year,
-            totalValue: contract.contractValue,
-            dueDate: dueDate,
-            status: PaymentStatus.pendiente,
+          paymentsToInsert.add(
+            MonthlyPayment(
+              contractId: contract.id,
+              month: checkDate.month,
+              year: checkDate.year,
+              totalValue: contract.contractValue,
+              dueDate: dueDate,
+              status: PaymentStatus.pendiente,
+            ),
           );
-          await _dbHelper.insertMonthlyPayment(payment);
         }
       }
 
       // Siguiente mes para la comprobación
       checkDate = DateTime(checkDate.year, checkDate.month + 1);
+    }
+
+    // 2️⃣ Inserción masiva en UNA SOLA transacción
+    if (paymentsToInsert.isNotEmpty) {
+      await _dbHelper.insertMonthlyPaymentsBatch(paymentsToInsert);
     }
   }
 }

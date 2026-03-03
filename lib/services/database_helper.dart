@@ -23,7 +23,15 @@ class DatabaseHelper {
 
   Future<Database> _initDatabase() async {
     String path = join(await getDatabasesPath(), 'arriendos_v2.db');
-    return await openDatabase(path, version: 1, onCreate: _onCreate);
+    return await openDatabase(
+      path,
+      version: 2,
+      onConfigure: (db) async {
+        await db.execute('PRAGMA foreign_keys = ON');
+      },
+      onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
+    );
   }
 
   Future<void> closeDatabase() async {
@@ -89,23 +97,36 @@ class DatabaseHelper {
       )
     ''');
 
-    // Índice único para evitar duplicados de pagos por mes/año
+    // Índices para optimización ⚡
+    await _createIndexes(db);
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await _createIndexes(db);
+    }
+  }
+
+  Future<void> _createIndexes(Database db) async {
+    // Acelera la carga de abonos por mes
     await db.execute(
-      'CREATE UNIQUE INDEX idx_payment_contract_date ON monthly_payments(contratoId, mes, año)',
+      'CREATE INDEX IF NOT EXISTS idx_abonos_pagoId ON abonos(pagoId)',
     );
 
-    // 💸 ABONOS
-    await db.execute('''
-      CREATE TABLE abonos(
-        id TEXT PRIMARY KEY,
-        pagoId TEXT,
-        valor REAL,
-        fecha TEXT,
-        metodo TEXT,
-        creadoEn TEXT,
-        FOREIGN KEY (pagoId) REFERENCES monthly_payments (id) ON DELETE CASCADE
-      )
-    ''');
+    // Acelera el pago en cascada (busca pagos no terminados de un contrato)
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_payments_contract_val ON monthly_payments(contratoId, valorPagado)',
+    );
+
+    // Acelera el listado de unidades por edificio
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_units_buildingId ON units(buildingId)',
+    );
+
+    // Acelera la búsqueda de contratos activos por unidad
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_contracts_unit_active ON contracts(apartamentoId, activo)',
+    );
   }
 
   // --- CRUD METHODS ---
@@ -214,6 +235,21 @@ class DatabaseHelper {
       payment.toMap(),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+  }
+
+  Future<void> insertMonthlyPaymentsBatch(List<MonthlyPayment> payments) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      final batch = txn.batch();
+      for (var payment in payments) {
+        batch.insert(
+          'monthly_payments',
+          payment.toMap(),
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+      }
+      await batch.commit(noResult: true);
+    });
   }
 
   Future<List<MonthlyPayment>> getPaymentsForContract(String contractId) async {
@@ -372,5 +408,35 @@ class DatabaseHelper {
 
       return 1;
     });
+  }
+
+  // Aggregated Stats
+  Future<double> getUnitDebt(String unitId) async {
+    final db = await database;
+    final result = await db.rawQuery(
+      '''
+      SELECT SUM(mp.valorTotal - mp.valorPagado) as totalDebt
+      FROM monthly_payments mp
+      JOIN contracts c ON mp.contratoId = c.id
+      WHERE c.apartamentoId = ? AND c.activo = 1
+    ''',
+      [unitId],
+    );
+    return (result.first['totalDebt'] as num?)?.toDouble() ?? 0.0;
+  }
+
+  Future<double> getBuildingDebt(String buildingId) async {
+    final db = await database;
+    final result = await db.rawQuery(
+      '''
+      SELECT SUM(mp.valorTotal - mp.valorPagado) as totalDebt
+      FROM monthly_payments mp
+      JOIN contracts c ON mp.contratoId = c.id
+      JOIN units u ON c.apartamentoId = u.id
+      WHERE u.buildingId = ? AND c.activo = 1
+    ''',
+      [buildingId],
+    );
+    return (result.first['totalDebt'] as num?)?.toDouble() ?? 0.0;
   }
 }

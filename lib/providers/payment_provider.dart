@@ -5,26 +5,35 @@ import '../services/database_helper.dart';
 import 'dashboard_provider.dart';
 import 'building_stats_provider.dart';
 
-class PaymentNotifier extends StateNotifier<List<MonthlyPayment>> {
+class PaymentNotifier extends StateNotifier<AsyncValue<List<MonthlyPayment>>> {
   final DatabaseHelper _dbHelper;
+  final String contractId;
 
-  PaymentNotifier(this._dbHelper) : super([]);
+  PaymentNotifier(this._dbHelper, this.contractId)
+    : super(const AsyncValue.loading()) {
+    loadPayments();
+  }
 
-  Future<void> loadPaymentsForContract(String contractId) async {
-    final payments = await _dbHelper.getPaymentsForContract(contractId);
-    if (!mounted) return;
-    state = payments;
+  Future<void> loadPayments() async {
+    try {
+      final payments = await _dbHelper.getPaymentsForContract(contractId);
+      if (!mounted) return;
+      state = AsyncValue.data(payments);
+    } catch (e, st) {
+      if (mounted) {
+        state = AsyncValue.error(e, st);
+      }
+    }
   }
 
   Future<void> addAbono(
     Abono abono,
-    String contractId,
     String buildingId,
     String unitId,
     WidgetRef ref,
   ) async {
     await _dbHelper.insertAbono(abono);
-    await loadPaymentsForContract(contractId);
+    await loadPayments();
     if (!mounted) return;
     _invalidateStats(ref, buildingId, unitId);
   }
@@ -32,7 +41,6 @@ class PaymentNotifier extends StateNotifier<List<MonthlyPayment>> {
   Future<void> applyCascadingPayment({
     required double totalAmount,
     required String method,
-    required String contractId,
     required String buildingId,
     required String unitId,
     required WidgetRef ref,
@@ -43,20 +51,19 @@ class PaymentNotifier extends StateNotifier<List<MonthlyPayment>> {
       contractId: contractId,
     );
 
-    await loadPaymentsForContract(contractId);
+    await loadPayments();
     if (!mounted) return;
     _invalidateStats(ref, buildingId, unitId);
   }
 
   Future<void> deleteAbono({
     required String abonoId,
-    required String contractId,
     required String buildingId,
     required String unitId,
     required WidgetRef ref,
   }) async {
     await _dbHelper.deleteAbono(abonoId);
-    await loadPaymentsForContract(contractId);
+    await loadPayments();
     if (!mounted) return;
     _invalidateStats(ref, buildingId, unitId);
   }
@@ -71,8 +78,12 @@ class PaymentNotifier extends StateNotifier<List<MonthlyPayment>> {
 }
 
 final paymentProvider =
-    StateNotifierProvider<PaymentNotifier, List<MonthlyPayment>>((ref) {
-      return PaymentNotifier(DatabaseHelper());
+    StateNotifierProvider.family<
+      PaymentNotifier,
+      AsyncValue<List<MonthlyPayment>>,
+      String
+    >((ref, contractId) {
+      return PaymentNotifier(DatabaseHelper(), contractId);
     });
 
 final abonosProvider = FutureProvider.family<List<Abono>, String>((
