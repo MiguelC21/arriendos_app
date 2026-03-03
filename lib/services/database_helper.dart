@@ -209,9 +209,8 @@ class DatabaseHelper {
 
   Future<int> terminateContract(String contractId) async {
     final db = await database;
-    return await db.update(
+    return await db.delete(
       'contracts',
-      {'activo': 0, 'fechaFin': DateTime.now().toIso8601String()},
       where: 'id = ?',
       whereArgs: [contractId],
     );
