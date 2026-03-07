@@ -107,8 +107,25 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
         final key = '${checkDate.month}-${checkDate.year}';
 
         if (!existingKeys.contains(key)) {
-          // Generar para este mes
+          // Determinar el día de generación para este mes específico
+          int generationDay = contract.startDate.day;
+          int lastDayOfCheckMonth = DateTime(
+            checkDate.year,
+            checkDate.month + 1,
+            0,
+          ).day;
+          if (generationDay > lastDayOfCheckMonth) {
+            generationDay = lastDayOfCheckMonth;
+          }
 
+          // Si es el mes actual, verificar si ya llegó el día de generación
+          if (checkDate.year == now.year && checkDate.month == now.month) {
+            if (now.day < generationDay) {
+              break; // Aún no es el día de generar el pago de este mes
+            }
+          }
+
+          // Generar para este mes
           final dueDateDay =
               contract.startDate.day >
                   DateTime(checkDate.year, checkDate.month + 2, 0).day
