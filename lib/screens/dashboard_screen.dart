@@ -189,6 +189,19 @@ class DashboardScreen extends ConsumerWidget {
                         style: TextStyle(color: Colors.white70, fontSize: 16),
                       ),
                       const SizedBox(height: 8),
+                      // Texto de diagnóstico para el usuario
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Text(
+                          e.toString(),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white24,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
                       TextButton.icon(
                         onPressed: () => ref.invalidate(buildingProvider),
                         icon: const Icon(Icons.refresh_rounded),

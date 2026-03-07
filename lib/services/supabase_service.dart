@@ -40,6 +40,15 @@ class SupabaseService {
     await _client.from('units').insert(unit.toMap());
   }
 
+  Future<Unit?> getUnitById(String id) async {
+    final response = await _client
+        .from('units')
+        .select()
+        .eq('id', id)
+        .maybeSingle();
+    return response != null ? Unit.fromMap(response) : null;
+  }
+
   Future<void> updateUnit(Unit unit) async {
     await _client.from('units').upsert(unit.toMap());
   }

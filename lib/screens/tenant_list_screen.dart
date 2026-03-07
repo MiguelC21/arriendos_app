@@ -4,8 +4,7 @@ import 'package:intl/intl.dart';
 import '../providers/tenant_provider.dart';
 import '../providers/building_stats_provider.dart';
 import 'unit_detail_screen.dart';
-import '../services/database_helper.dart';
-import '../models/unit.dart'; // Added this import
+import '../services/supabase_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class TenantListScreen extends ConsumerWidget {
@@ -129,16 +128,10 @@ class TenantListScreen extends ConsumerWidget {
                   ),
                   onTap: () async {
                     // Obtener el objeto Unit real para ir al detalle
-                    final dbHelper = DatabaseHelper();
-                    final db = await dbHelper.database;
-                    final List<Map<String, dynamic>> maps = await db.query(
-                      'units',
-                      where: 'id = ?',
-                      whereArgs: [tenant.unitId],
-                      limit: 1,
+                    final unit = await SupabaseService().getUnitById(
+                      tenant.unitId,
                     );
-                    if (maps.isNotEmpty && context.mounted) {
-                      final unit = Unit.fromMap(maps.first);
+                    if (unit != null && context.mounted) {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
