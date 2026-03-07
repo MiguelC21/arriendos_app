@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/building.dart';
 import '../services/database_helper.dart';
+import 'dashboard_provider.dart';
 
 class BuildingNotifier extends StateNotifier<List<Building>> {
   final DatabaseHelper _dbHelper;
@@ -16,6 +17,13 @@ class BuildingNotifier extends StateNotifier<List<Building>> {
   Future<void> addBuilding(Building building) async {
     await _dbHelper.insertBuilding(building);
     await loadBuildings();
+  }
+
+  Future<void> deleteBuilding(String buildingId, WidgetRef ref) async {
+    await _dbHelper.deleteBuilding(buildingId);
+    await loadBuildings();
+    // Invalidar estadísticas globales ya que el inmueble desaparece
+    ref.invalidate(dashboardStatsProvider);
   }
 }
 

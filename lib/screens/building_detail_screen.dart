@@ -8,6 +8,7 @@ import '../providers/contract_provider.dart';
 import '../providers/building_stats_provider.dart';
 import 'unit_detail_screen.dart';
 import '../utils/formatters.dart';
+import '../providers/building_provider.dart';
 
 class BuildingDetailScreen extends ConsumerStatefulWidget {
   final Building building;
@@ -53,6 +54,10 @@ class _BuildingDetailScreenState extends ConsumerState<BuildingDetailScreen> {
                   .loadUnitsForBuilding(widget.building.id);
             },
             icon: const Icon(Icons.refresh_rounded),
+          ),
+          IconButton(
+            onPressed: () => _showDeleteConfirmDialog(context, ref),
+            icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
           ),
         ],
       ),
@@ -236,6 +241,39 @@ class _BuildingDetailScreenState extends ConsumerState<BuildingDetailScreen> {
             const SizedBox(height: 20),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showDeleteConfirmDialog(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: const Text('¿Eliminar Inmueble?'),
+        content: Text(
+          'Esta acción eliminará "${widget.building.name}" junto con todos sus apartamentos, contratos, pagos y abonos. Esta acción no se puede deshacer.\n\n¿Deseas continuar?',
+          style: const TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context); // Cerrar diálogo
+              Navigator.pop(context); // Volver al Dashboard
+              await ref
+                  .read(buildingProvider.notifier)
+                  .deleteBuilding(widget.building.id, ref);
+            },
+            child: const Text(
+              'Eliminar Todo',
+              style: TextStyle(color: Colors.redAccent),
+            ),
+          ),
+        ],
       ),
     );
   }

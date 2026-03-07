@@ -315,9 +315,69 @@ class _BuildingCard extends ConsumerWidget {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, color: Colors.white24),
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert, color: Colors.white24),
+              onSelected: (value) {
+                if (value == 'delete') {
+                  _showDeleteConfirmDialog(context, ref, building);
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: ListTile(
+                    leading: Icon(
+                      Icons.delete_outline_rounded,
+                      size: 20,
+                      color: Colors.redAccent,
+                    ),
+                    title: Text(
+                      'Eliminar',
+                      style: TextStyle(color: Colors.redAccent),
+                    ),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showDeleteConfirmDialog(
+    BuildContext context,
+    WidgetRef ref,
+    Building building,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E293B),
+        title: const Text('¿Eliminar Inmueble?'),
+        content: Text(
+          'Esta acción eliminará "${building.name}" junto con todos sus apartamentos, contratos, pagos y abonos. Esta acción no se puede deshacer.\n\n¿Deseas continuar?',
+          style: const TextStyle(color: Colors.white70),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              await ref
+                  .read(buildingProvider.notifier)
+                  .deleteBuilding(building.id, ref);
+            },
+            child: const Text(
+              'Eliminar Todo',
+              style: TextStyle(color: Colors.redAccent),
+            ),
+          ),
+        ],
       ),
     );
   }

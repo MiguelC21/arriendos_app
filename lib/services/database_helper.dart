@@ -97,6 +97,19 @@ class DatabaseHelper {
       )
     ''');
 
+    // 💸 ABONOS (Asegurar que exista en onCreate)
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS abonos(
+        id TEXT PRIMARY KEY,
+        pagoId TEXT,
+        valor REAL,
+        fecha TEXT,
+        metodo TEXT,
+        creadoEn TEXT,
+        FOREIGN KEY (pagoId) REFERENCES monthly_payments (id) ON DELETE CASCADE
+      )
+    ''');
+
     // Índices para optimización ⚡
     await _createIndexes(db);
   }
@@ -148,6 +161,15 @@ class DatabaseHelper {
       orderBy: 'name',
     );
     return List.generate(maps.length, (i) => Building.fromMap(maps[i]));
+  }
+
+  Future<int> deleteBuilding(String buildingId) async {
+    final db = await database;
+    return await db.delete(
+      'buildings',
+      where: 'id = ?',
+      whereArgs: [buildingId],
+    );
   }
 
   // Units
