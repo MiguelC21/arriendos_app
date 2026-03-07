@@ -22,6 +22,13 @@ class SupabaseService {
     await _client.from('buildings').insert(building.toMap());
   }
 
+  Future<void> updateBuilding(Building building) async {
+    await _client
+        .from('buildings')
+        .update(building.toMap())
+        .eq('id', building.id);
+  }
+
   Future<void> deleteBuilding(String id) async {
     await _client.from('buildings').delete().eq('id', id);
   }

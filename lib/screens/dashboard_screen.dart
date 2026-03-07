@@ -368,11 +368,28 @@ class _BuildingCard extends ConsumerWidget {
             PopupMenuButton<String>(
               icon: const Icon(Icons.more_vert, color: Colors.white24),
               onSelected: (value) {
-                if (value == 'delete') {
+                if (value == 'edit') {
+                  _showEditBuildingDialog(context, ref, building);
+                } else if (value == 'delete') {
                   _showDeleteConfirmDialog(context, ref, building);
                 }
               },
               itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'edit',
+                  child: ListTile(
+                    leading: Icon(
+                      Icons.edit_outlined,
+                      size: 20,
+                      color: Color(0xFF38BDF8),
+                    ),
+                    title: Text(
+                      'Editar',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
                 const PopupMenuItem(
                   value: 'delete',
                   child: ListTile(
@@ -390,6 +407,73 @@ class _BuildingCard extends ConsumerWidget {
                 ),
               ],
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showEditBuildingDialog(
+    BuildContext context,
+    WidgetRef ref,
+    Building building,
+  ) {
+    final nameController = TextEditingController(text: building.name);
+    final addressController = TextEditingController(text: building.address);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1E293B),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+          left: 20,
+          right: 20,
+          top: 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Editar Inmueble',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 20),
+            TextField(
+              controller: nameController,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Nombre (Ej: Casa Ibagué)',
+              ),
+            ),
+            const SizedBox(height: 15),
+            TextField(
+              controller: addressController,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(labelText: 'Dirección'),
+            ),
+            const SizedBox(height: 30),
+            ElevatedButton(
+              onPressed: () {
+                if (nameController.text.isNotEmpty) {
+                  final updatedBuilding = building.copyWith(
+                    name: nameController.text.trim(),
+                    address: addressController.text.trim(),
+                  );
+                  ref
+                      .read(buildingProvider.notifier)
+                      .updateBuilding(updatedBuilding);
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text('Guardar Cambios'),
+            ),
+            const SizedBox(height: 20),
           ],
         ),
       ),

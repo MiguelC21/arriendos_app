@@ -19,6 +19,14 @@ class BuildingNotifier extends AsyncNotifier<List<Building>> {
     });
   }
 
+  Future<void> updateBuilding(Building building) async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(() async {
+      await _supabaseService.updateBuilding(building);
+      return _supabaseService.getBuildings();
+    });
+  }
+
   Future<void> deleteBuilding(String buildingId, WidgetRef ref) async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {

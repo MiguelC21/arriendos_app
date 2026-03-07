@@ -31,4 +31,13 @@ class Building {
       createdAt: DateTime.parse(map['created_at']),
     );
   }
+
+  Building copyWith({String? name, String? address}) {
+    return Building(
+      id: id,
+      name: name ?? this.name,
+      address: address ?? this.address,
+      createdAt: createdAt,
+    );
+  }
 }
