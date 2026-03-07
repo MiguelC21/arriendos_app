@@ -19,20 +19,20 @@ class Unit {
   Map<String, dynamic> toMap() {
     return {
       'id': id,
-      'buildingId': buildingId,
-      'numero': number,
-      'valorBase': baseValue,
-      'creadoEn': createdAt.toIso8601String(),
+      'building_id': buildingId,
+      'number': number,
+      'base_value': baseValue,
+      'created_at': createdAt.toIso8601String(),
     };
   }
 
   factory Unit.fromMap(Map<String, dynamic> map) {
     return Unit(
       id: map['id'],
-      buildingId: map['buildingId'],
-      number: map['numero'],
-      baseValue: map['valorBase'],
-      createdAt: DateTime.parse(map['creadoEn']),
+      buildingId: map['building_id'],
+      number: map['number'],
+      baseValue: (map['base_value'] as num).toDouble(),
+      createdAt: DateTime.parse(map['created_at']),
     );
   }
 }

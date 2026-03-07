@@ -19,7 +19,7 @@ class Building {
       'id': id,
       'name': name,
       'address': address,
-      'createdAt': createdAt.toIso8601String(),
+      'created_at': createdAt.toIso8601String(),
     };
   }
 
@@ -28,7 +28,7 @@ class Building {
       id: map['id'],
       name: map['name'],
       address: map['address'],
-      createdAt: DateTime.parse(map['createdAt']),
+      createdAt: DateTime.parse(map['created_at']),
     );
   }
 }

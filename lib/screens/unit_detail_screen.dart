@@ -37,9 +37,8 @@ class _UnitDetailScreenState extends ConsumerState<UnitDetailScreen> {
       symbol: '\$',
       decimalDigits: 0,
     );
-
     return Scaffold(
-      appBar: AppBar(title: Text('Apartamento ${widget.unit.number}')),
+      appBar: AppBar(title: Text(widget.unit.number)),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         child: Column(
@@ -195,8 +194,8 @@ class _UnitDetailScreenState extends ConsumerState<UnitDetailScreen> {
                           builder: (context) => AlertDialog(
                             backgroundColor: const Color(0xFF1E293B),
                             title: const Text('Finalizar Contrato'),
-                            content: Text(
-                              '¿Estás seguro de que deseas finalizar el contrato de ${contract.tenantName}? El apartamento quedará disponible.',
+                            content: const Text(
+                              '¿Estás seguro de que deseas finalizar el contrato? Se eliminará permanentemente todo el historial de pagos y abonos relacionados.',
                             ),
                             actions: [
                               TextButton(
@@ -400,7 +399,8 @@ class _ContractDialogContentState extends State<_ContractDialogContent> {
           TextField(
             controller: widget.nameController,
             decoration: const InputDecoration(labelText: 'Nombre Inquilino'),
-            textCapitalization: TextCapitalization.words,
+            textCapitalization: TextCapitalization.characters,
+            inputFormatters: [UpperCaseTextFormatter()],
             enabled: !_isLoading,
           ),
           TextField(
@@ -472,8 +472,8 @@ class _ContractDialogContentState extends State<_ContractDialogContent> {
 
                           final c = Contract(
                             unitId: widget.unit.id,
-                            tenantName: widget.nameController.text,
-                            phone: widget.phoneController.text,
+                            tenantName: widget.nameController.text.trim(),
+                            phone: widget.phoneController.text.trim(),
                             startDate: widget.selectedDate,
                             contractValue: contractValue,
                           );
@@ -793,7 +793,7 @@ class _PaymentHistoryList extends ConsumerWidget {
                                       color: Color(0xFF38BDF8),
                                     ),
                                     title: Text(
-                                      'Abono: ${currencyFormat.format(a.value)}',
+                                      'Abono: ${currencyFormat.format(a.amount)}',
                                       style: const TextStyle(
                                         fontSize: 14,
                                         fontWeight: FontWeight.w500,
@@ -1042,7 +1042,8 @@ class _EditTenantDialogContentState extends State<_EditTenantDialogContent> {
           TextField(
             controller: _nameController,
             decoration: const InputDecoration(labelText: 'Nombre Completo'),
-            textCapitalization: TextCapitalization.words,
+            textCapitalization: TextCapitalization.characters,
+            inputFormatters: [UpperCaseTextFormatter()],
             enabled: !_isLoading,
           ),
           const SizedBox(height: 10),
@@ -1063,8 +1064,8 @@ class _EditTenantDialogContentState extends State<_EditTenantDialogContent> {
                         setState(() => _isLoading = true);
                         try {
                           final updatedContract = widget.contract.copyWith(
-                            tenantName: _nameController.text,
-                            phone: _phoneController.text,
+                            tenantName: _nameController.text.trim(),
+                            phone: _phoneController.text.trim(),
                           );
                           await widget.ref
                               .read(contractProvider.notifier)

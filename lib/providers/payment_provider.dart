@@ -1,22 +1,22 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/monthly_payment.dart';
 import '../models/abono.dart';
-import '../services/database_helper.dart';
+import '../services/supabase_service.dart';
 import 'dashboard_provider.dart';
 import 'building_stats_provider.dart';
 
 class PaymentNotifier extends StateNotifier<AsyncValue<List<MonthlyPayment>>> {
-  final DatabaseHelper _dbHelper;
+  final SupabaseService _supabaseService;
   final String contractId;
 
-  PaymentNotifier(this._dbHelper, this.contractId)
+  PaymentNotifier(this._supabaseService, this.contractId)
     : super(const AsyncValue.loading()) {
     loadPayments();
   }
 
   Future<void> loadPayments() async {
     try {
-      final payments = await _dbHelper.getPaymentsForContract(contractId);
+      final payments = await _supabaseService.getPayments(contractId);
       if (!mounted) return;
       state = AsyncValue.data(payments);
     } catch (e, st) {
@@ -32,7 +32,7 @@ class PaymentNotifier extends StateNotifier<AsyncValue<List<MonthlyPayment>>> {
     String unitId,
     WidgetRef ref,
   ) async {
-    await _dbHelper.insertAbono(abono);
+    await _supabaseService.insertAbono(abono);
     await loadPayments();
     if (!mounted) return;
     _invalidateStats(ref, buildingId, unitId);
@@ -45,7 +45,7 @@ class PaymentNotifier extends StateNotifier<AsyncValue<List<MonthlyPayment>>> {
     required String unitId,
     required WidgetRef ref,
   }) async {
-    await _dbHelper.applyCascadingPayment(
+    await _supabaseService.applyCascadingPayment(
       totalAmount: totalAmount,
       method: method,
       contractId: contractId,
@@ -62,7 +62,7 @@ class PaymentNotifier extends StateNotifier<AsyncValue<List<MonthlyPayment>>> {
     required String unitId,
     required WidgetRef ref,
   }) async {
-    await _dbHelper.deleteAbono(abonoId);
+    await _supabaseService.deleteAbono(abonoId);
     await loadPayments();
     if (!mounted) return;
     _invalidateStats(ref, buildingId, unitId);
@@ -83,12 +83,12 @@ final paymentProvider =
       AsyncValue<List<MonthlyPayment>>,
       String
     >((ref, contractId) {
-      return PaymentNotifier(DatabaseHelper(), contractId);
+      return PaymentNotifier(SupabaseService(), contractId);
     });
 
 final abonosProvider = FutureProvider.family<List<Abono>, String>((
   ref,
   paymentId,
 ) async {
-  return await DatabaseHelper().getAbonosForPayment(paymentId);
+  return await SupabaseService().getAbonosForPayment(paymentId);
 });

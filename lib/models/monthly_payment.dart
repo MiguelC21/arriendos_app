@@ -29,28 +29,32 @@ class MonthlyPayment {
   Map<String, dynamic> toMap() {
     return {
       'id': id,
-      'contratoId': contractId,
-      'mes': month,
-      'año': year,
-      'valorTotal': totalValue,
-      'valorPagado': paidValue,
-      'fechaVencimiento': dueDate.toIso8601String(),
-      'estado': status.name,
-      'creadoEn': createdAt.toIso8601String(),
+      'contract_id': contractId,
+      'month': month,
+      'year': year,
+      'total_value': totalValue,
+      'paid_value': paidValue,
+      'due_date':
+          "${dueDate.year}-${dueDate.month.toString().padLeft(2, '0')}-${dueDate.day.toString().padLeft(2, '0')}",
+      'status': status.name,
+      'is_fully_paid': paidValue >= totalValue,
+      'created_at': createdAt.toIso8601String(),
     };
   }
 
   factory MonthlyPayment.fromMap(Map<String, dynamic> map) {
+    final paid = (map['paid_value'] as num?)?.toDouble() ?? 0.0;
+    final total = (map['total_value'] as num).toDouble();
     return MonthlyPayment(
       id: map['id'],
-      contractId: map['contratoId'],
-      month: map['mes'],
-      year: map['año'],
-      totalValue: map['valorTotal'],
-      paidValue: map['valorPagado'],
-      dueDate: DateTime.parse(map['fechaVencimiento']),
-      status: PaymentStatus.values.byName(map['estado']),
-      createdAt: DateTime.parse(map['creadoEn']),
+      contractId: map['contract_id'],
+      month: map['month'],
+      year: map['year'],
+      totalValue: total,
+      paidValue: paid,
+      dueDate: DateTime.parse(map['due_date']),
+      status: PaymentStatus.values.byName(map['status'] ?? 'pendiente'),
+      createdAt: DateTime.parse(map['created_at']),
     );
   }
 }

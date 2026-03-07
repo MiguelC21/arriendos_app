@@ -147,11 +147,12 @@ class DatabaseHelper {
   // Buildings
   Future<int> insertBuilding(Building building) async {
     final db = await database;
-    return await db.insert(
-      'buildings',
-      building.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    return await db.insert('buildings', {
+      'id': building.id,
+      'name': building.name,
+      'address': building.address,
+      'createdAt': building.createdAt.toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<List<Building>> getBuildings() async {
@@ -160,7 +161,14 @@ class DatabaseHelper {
       'buildings',
       orderBy: 'name',
     );
-    return List.generate(maps.length, (i) => Building.fromMap(maps[i]));
+    return maps.map((m) {
+      return Building(
+        id: m['id'],
+        name: m['name'],
+        address: m['address'],
+        createdAt: DateTime.parse(m['createdAt']),
+      );
+    }).toList();
   }
 
   Future<int> deleteBuilding(String buildingId) async {
@@ -175,11 +183,13 @@ class DatabaseHelper {
   // Units
   Future<int> insertUnit(Unit unit) async {
     final db = await database;
-    return await db.insert(
-      'units',
-      unit.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    return await db.insert('units', {
+      'id': unit.id,
+      'buildingId': unit.buildingId,
+      'numero': unit.number,
+      'valorBase': unit.baseValue,
+      'creadoEn': unit.createdAt.toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<List<Unit>> getUnitsForBuilding(String buildingId) async {
@@ -189,14 +199,28 @@ class DatabaseHelper {
       where: 'buildingId = ?',
       whereArgs: [buildingId],
     );
-    return List.generate(maps.length, (i) => Unit.fromMap(maps[i]));
+    return maps.map((m) {
+      return Unit(
+        id: m['id'],
+        buildingId: m['buildingId'],
+        number: m['numero'],
+        baseValue: m['valorBase'],
+        createdAt: DateTime.parse(m['creadoEn']),
+      );
+    }).toList();
   }
 
   Future<int> updateUnit(Unit unit) async {
     final db = await database;
     return await db.update(
       'units',
-      unit.toMap(),
+      {
+        'id': unit.id,
+        'buildingId': unit.buildingId,
+        'numero': unit.number,
+        'valorBase': unit.baseValue,
+        'creadoEn': unit.createdAt.toIso8601String(),
+      },
       where: 'id = ?',
       whereArgs: [unit.id],
     );
@@ -210,11 +234,17 @@ class DatabaseHelper {
   // Contracts
   Future<int> insertContract(Contract contract) async {
     final db = await database;
-    return await db.insert(
-      'contracts',
-      contract.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    return await db.insert('contracts', {
+      'id': contract.id,
+      'apartamentoId': contract.unitId,
+      'nombreInquilino': contract.tenantName,
+      'telefono': contract.phone,
+      'fechaInicio': contract.startDate.toIso8601String(),
+      'fechaFin': contract.endDate?.toIso8601String(),
+      'valorContrato': contract.contractValue,
+      'activo': contract.active ? 1 : 0,
+      'creadoEn': contract.createdAt.toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<Contract?> getActiveContractForUnit(String unitId) async {
@@ -226,7 +256,18 @@ class DatabaseHelper {
       limit: 1,
     );
     if (maps.isEmpty) return null;
-    return Contract.fromMap(maps.first);
+    final m = maps.first;
+    return Contract(
+      id: m['id'],
+      unitId: m['apartamentoId'],
+      tenantName: m['nombreInquilino'],
+      phone: m['telefono'],
+      startDate: DateTime.parse(m['fechaInicio']),
+      endDate: m['fechaFin'] != null ? DateTime.parse(m['fechaFin']) : null,
+      contractValue: m['valorContrato'],
+      active: m['activo'] == 1,
+      createdAt: DateTime.parse(m['creadoEn']),
+    );
   }
 
   Future<int> terminateContract(String contractId) async {
@@ -242,7 +283,17 @@ class DatabaseHelper {
     final db = await database;
     return await db.update(
       'contracts',
-      contract.toMap(),
+      {
+        'id': contract.id,
+        'apartamentoId': contract.unitId,
+        'nombreInquilino': contract.tenantName,
+        'telefono': contract.phone,
+        'fechaInicio': contract.startDate.toIso8601String(),
+        'fechaFin': contract.endDate?.toIso8601String(),
+        'valorContrato': contract.contractValue,
+        'activo': contract.active ? 1 : 0,
+        'creadoEn': contract.createdAt.toIso8601String(),
+      },
       where: 'id = ?',
       whereArgs: [contract.id],
     );
@@ -251,11 +302,17 @@ class DatabaseHelper {
   // Monthly Payments
   Future<int> insertMonthlyPayment(MonthlyPayment payment) async {
     final db = await database;
-    return await db.insert(
-      'monthly_payments',
-      payment.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    return await db.insert('monthly_payments', {
+      'id': payment.id,
+      'contratoId': payment.contractId,
+      'mes': payment.month,
+      'año': payment.year,
+      'valorTotal': payment.totalValue,
+      'valorPagado': payment.paidValue,
+      'fechaVencimiento': payment.dueDate.toIso8601String(),
+      'estado': payment.status.name,
+      'creadoEn': payment.createdAt.toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<void> insertMonthlyPaymentsBatch(List<MonthlyPayment> payments) async {
@@ -263,11 +320,17 @@ class DatabaseHelper {
     await db.transaction((txn) async {
       final batch = txn.batch();
       for (var payment in payments) {
-        batch.insert(
-          'monthly_payments',
-          payment.toMap(),
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
+        batch.insert('monthly_payments', {
+          'id': payment.id,
+          'contratoId': payment.contractId,
+          'mes': payment.month,
+          'año': payment.year,
+          'valorTotal': payment.totalValue,
+          'valorPagado': payment.paidValue,
+          'fechaVencimiento': payment.dueDate.toIso8601String(),
+          'estado': payment.status.name,
+          'creadoEn': payment.createdAt.toIso8601String(),
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
       }
       await batch.commit(noResult: true);
     });
@@ -281,7 +344,19 @@ class DatabaseHelper {
       whereArgs: [contractId],
       orderBy: 'año DESC, mes DESC',
     );
-    return List.generate(maps.length, (i) => MonthlyPayment.fromMap(maps[i]));
+    return maps.map((m) {
+      return MonthlyPayment(
+        id: m['id'],
+        contractId: m['contratoId'],
+        month: m['mes'],
+        year: m['año'],
+        totalValue: m['valorTotal'],
+        paidValue: m['valorPagado'],
+        dueDate: DateTime.parse(m['fechaVencimiento']),
+        status: PaymentStatus.values.byName(m['estado']),
+        createdAt: DateTime.parse(m['creadoEn']),
+      );
+    }).toList();
   }
 
   Future<MonthlyPayment?> getPaymentForMonth(
@@ -297,14 +372,32 @@ class DatabaseHelper {
       limit: 1,
     );
     if (maps.isEmpty) return null;
-    return MonthlyPayment.fromMap(maps.first);
+    final m = maps.first;
+    return MonthlyPayment(
+      id: m['id'],
+      contractId: m['contratoId'],
+      month: m['mes'],
+      year: m['año'],
+      totalValue: m['valorTotal'],
+      paidValue: m['valorPagado'],
+      dueDate: DateTime.parse(m['fechaVencimiento']),
+      status: PaymentStatus.values.byName(m['estado']),
+      createdAt: DateTime.parse(m['creadoEn']),
+    );
   }
 
   // Abonos
   Future<int> insertAbono(Abono abono) async {
     final db = await database;
     return await db.transaction((txn) async {
-      await txn.insert('abonos', abono.toMap());
+      await txn.insert('abonos', {
+        'id': abono.id,
+        'pagoId': abono.paymentId,
+        'valor': abono.amount,
+        'fecha': abono.date.toIso8601String(),
+        'metodo': abono.note,
+        'creadoEn': abono.createdAt.toIso8601String(),
+      });
 
       // Actualizar valorPagado en monthly_payments
       await txn.execute(
@@ -317,7 +410,7 @@ class DatabaseHelper {
             END
         WHERE id = ?
       ''',
-        [abono.value, abono.value, abono.paymentId],
+        [abono.amount, abono.amount, abono.paymentId],
       );
 
       return 1;
@@ -332,7 +425,16 @@ class DatabaseHelper {
       whereArgs: [paymentId],
       orderBy: 'fecha DESC',
     );
-    return List.generate(maps.length, (i) => Abono.fromMap(maps[i]));
+    return maps.map((m) {
+      return Abono(
+        id: m['id'] as String,
+        paymentId: m['pagoId'] as String,
+        amount: (m['valor'] as num).toDouble(),
+        date: DateTime.parse(m['fecha'] as String),
+        note: m['metodo'] as String? ?? '',
+        createdAt: DateTime.parse(m['creadoEn'] as String),
+      );
+    }).toList();
   }
 
   Future<void> applyCascadingPayment({

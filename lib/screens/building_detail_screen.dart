@@ -23,11 +23,12 @@ class _BuildingDetailScreenState extends ConsumerState<BuildingDetailScreen> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(
-      () => ref
-          .read(unitProvider.notifier)
-          .loadUnitsForBuilding(widget.building.id),
-    );
+    Future.microtask(() {
+      ref.read(unitProvider.notifier).loadUnitsForBuilding(widget.building.id);
+      ref
+          .read(contractProvider.notifier)
+          .loadActiveContractsForBuilding(widget.building.id);
+    });
   }
 
   @override
@@ -179,7 +180,7 @@ class _BuildingDetailScreenState extends ConsumerState<BuildingDetailScreen> {
   }
 
   void _showAddUnitDialog(BuildContext context, WidgetRef ref) {
-    final numberController = TextEditingController();
+    final numberController = TextEditingController(text: 'Apartamento ');
     final valueController = TextEditingController();
 
     showModalBottomSheet(
@@ -207,6 +208,7 @@ class _BuildingDetailScreenState extends ConsumerState<BuildingDetailScreen> {
             const SizedBox(height: 20),
             TextField(
               controller: numberController,
+              textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(
                 labelText: 'Número (Ej: Apartamento 102)',
               ),
@@ -225,7 +227,7 @@ class _BuildingDetailScreenState extends ConsumerState<BuildingDetailScreen> {
                 if (numberController.text.isNotEmpty) {
                   final u = Unit(
                     buildingId: widget.building.id,
-                    number: numberController.text,
+                    number: numberController.text.trim(),
                     baseValue:
                         double.tryParse(
                           valueController.text.replaceAll('.', ''),
@@ -285,15 +287,6 @@ class _UnitCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Escuchar el contrato activo para esta unidad
-    ref.watch(contractProvider);
-    // Nota: Necesitamos cargar el contrato si no está
-    Future.microtask(
-      () => ref
-          .read(contractProvider.notifier)
-          .loadActiveContractForUnit(unit.id),
-    );
-
     final contractMap = ref.watch(contractProvider);
     final contract = contractMap[unit.id];
 
@@ -317,7 +310,7 @@ class _UnitCard extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Apartamento ${unit.number}',
+                    unit.number,
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -467,6 +460,7 @@ class _UnitCard extends ConsumerWidget {
             const SizedBox(height: 20),
             TextField(
               controller: numberController,
+              textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(
                 labelText: 'Número (Ej: Apartamento 102)',
               ),
@@ -486,7 +480,7 @@ class _UnitCard extends ConsumerWidget {
                   final updatedUnit = Unit(
                     id: unit.id,
                     buildingId: unit.buildingId,
-                    number: numberController.text,
+                    number: numberController.text.trim(),
                     baseValue:
                         double.tryParse(
                           valueController.text.replaceAll('.', ''),

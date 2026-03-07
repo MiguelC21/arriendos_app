@@ -1,19 +1,21 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/contract.dart';
 import '../models/monthly_payment.dart';
-import '../services/database_helper.dart';
+import '../services/supabase_service.dart';
 import 'building_stats_provider.dart';
 import 'dashboard_provider.dart';
 import 'tenant_provider.dart';
 import 'payment_provider.dart';
 
 class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
-  final DatabaseHelper _dbHelper;
+  final SupabaseService _supabaseService;
+  final Set<String> _processingContracts = {};
 
-  ContractNotifier(this._dbHelper) : super({});
+  ContractNotifier(this._supabaseService) : super({});
 
   Future<void> loadActiveContractForUnit(String unitId) async {
-    final contract = await _dbHelper.getActiveContractForUnit(unitId);
+    final contract = await _supabaseService.getActiveContract(unitId);
     if (!mounted) return;
     state = {...state, unitId: contract};
 
@@ -22,12 +24,31 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
     }
   }
 
+  Future<void> loadActiveContractsForBuilding(String buildingId) async {
+    final contracts = await _supabaseService.getActiveContractsForBuilding(
+      buildingId,
+    );
+    if (!mounted) return;
+
+    final Map<String, Contract?> newEntries = {};
+    for (var contract in contracts) {
+      newEntries[contract.unitId] = contract;
+    }
+
+    state = {...state, ...newEntries};
+
+    // Opcional: Generar pagos para todos (aunque es mejor que sea bajo demanda)
+    for (var contract in contracts) {
+      _checkAndGenerateMonthlyPayment(contract);
+    }
+  }
+
   Future<void> addContract(
     Contract contract,
     String buildingId,
     WidgetRef ref,
   ) async {
-    await _dbHelper.insertContract(contract);
+    await _supabaseService.insertContract(contract);
     await loadActiveContractForUnit(contract.unitId);
     ref.invalidate(dashboardStatsProvider);
     ref.invalidate(activeTenantsProvider);
@@ -35,7 +56,6 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
     ref.invalidate(unitDebtProvider(contract.unitId));
     ref.invalidate(unitStatusProvider(contract.unitId));
     ref.invalidate(buildingDebtProvider(buildingId));
-    // Importante: invalidar la lista de pagos para que el primer cobro generado aparezca
     ref.invalidate(paymentProvider);
   }
 
@@ -45,11 +65,10 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
     String buildingId,
     WidgetRef ref,
   ) async {
-    await _dbHelper.terminateContract(contractId);
+    await _supabaseService.terminateContract(contractId);
     if (!mounted) return;
     state = {...state, unitId: null};
 
-    // Invalidar para que la UI se refresque y el apto salga como Disponible
     ref.invalidate(buildingDebtProvider(buildingId));
     ref.invalidate(unitStatusProvider(unitId));
     ref.invalidate(dashboardStatsProvider);
@@ -59,70 +78,47 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
   }
 
   Future<void> updateContract(Contract contract, WidgetRef ref) async {
-    await _dbHelper.updateContract(contract);
+    await _supabaseService.updateContract(contract);
     if (!mounted) return;
     state = {...state, contract.unitId: contract};
     ref.invalidate(activeTenantsProvider);
   }
 
   Future<void> _checkAndGenerateMonthlyPayment(Contract contract) async {
-    final now = DateTime.now();
+    if (_processingContracts.contains(contract.id)) return;
+    _processingContracts.add(contract.id);
 
-    // 1️⃣ Cargar todos los pagos existentes en UNA SOLA consulta
-    final existingPayments = await _dbHelper.getPaymentsForContract(
-      contract.id,
-    );
-    final Set<String> existingKeys = existingPayments
-        .map((p) => '${p.month}-${p.year}')
-        .toSet();
+    try {
+      final now = DateTime.now();
 
-    List<MonthlyPayment> paymentsToInsert = [];
+      final existingPayments = await _supabaseService.getPayments(contract.id);
+      final Set<String> existingKeys = existingPayments
+          .map((p) => '${p.month}-${p.year}')
+          .toSet();
 
-    // Empezamos desde el mes de inicio del contrato
-    DateTime checkDate = DateTime(
-      contract.startDate.year,
-      contract.startDate.month,
-    );
+      List<MonthlyPayment> paymentsToInsert = [];
+      DateTime checkDate = DateTime(
+        contract.startDate.year,
+        contract.startDate.month,
+      );
 
-    // Mientras la fecha que revisamos no sea futura al mes actual
-    while (checkDate.isBefore(now) ||
-        (checkDate.year == now.year && checkDate.month == now.month)) {
-      final key = '${checkDate.month}-${checkDate.year}';
+      while (checkDate.isBefore(now) ||
+          (checkDate.year == now.year && checkDate.month == now.month)) {
+        final key = '${checkDate.month}-${checkDate.year}';
 
-      if (!existingKeys.contains(key)) {
-        // Un pago de un mes X se genera si ya llegamos al día pactado en ese mes
-        // Si el contrato empezó un 31 y el mes tiene 28, usamos el 28.
-        final lastDayOfMonth = DateTime(
-          checkDate.year,
-          checkDate.month + 1,
-          0,
-        ).day;
-        final dayToUse = contract.startDate.day > lastDayOfMonth
-            ? lastDayOfMonth
-            : contract.startDate.day;
+        if (!existingKeys.contains(key)) {
+          // Generar para este mes
 
-        final generationDate = DateTime(
-          checkDate.year,
-          checkDate.month,
-          dayToUse,
-        );
-
-        if (now.isAfter(generationDate) ||
-            now.isAtSameMomentAs(generationDate)) {
-          // La fecha límite es el mismo día del SIGUIENTE mes (pago a mes vencido)
-          final lastDayOfNextMonth = DateTime(
-            checkDate.year,
-            checkDate.month + 2,
-            0,
-          ).day;
-          final dayToUseNext = contract.startDate.day > lastDayOfNextMonth
-              ? lastDayOfNextMonth
+          final dueDateDay =
+              contract.startDate.day >
+                  DateTime(checkDate.year, checkDate.month + 2, 0).day
+              ? DateTime(checkDate.year, checkDate.month + 2, 0).day
               : contract.startDate.day;
 
           final dueDate = DateTime(
             checkDate.year,
             checkDate.month + 1,
-            dayToUseNext,
+            dueDateDay,
           );
 
           paymentsToInsert.add(
@@ -136,20 +132,19 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
             ),
           );
         }
+        checkDate = DateTime(checkDate.year, checkDate.month + 1);
       }
-
-      // Siguiente mes para la comprobación
-      checkDate = DateTime(checkDate.year, checkDate.month + 1);
-    }
-
-    // 2️⃣ Inserción masiva en UNA SOLA transacción
-    if (paymentsToInsert.isNotEmpty) {
-      await _dbHelper.insertMonthlyPaymentsBatch(paymentsToInsert);
+      if (paymentsToInsert.isNotEmpty) {
+        debugPrint('Insertando ${paymentsToInsert.length} pagos mensuales...');
+        await _supabaseService.insertMonthlyPaymentsBatch(paymentsToInsert);
+      }
+    } finally {
+      _processingContracts.remove(contract.id);
     }
   }
 }
 
 final contractProvider =
     StateNotifierProvider<ContractNotifier, Map<String, Contract?>>((ref) {
-      return ContractNotifier(DatabaseHelper());
+      return ContractNotifier(SupabaseService());
     });

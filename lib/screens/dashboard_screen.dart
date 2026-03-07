@@ -27,7 +27,10 @@ class DashboardScreen extends ConsumerWidget {
         title: const Text('Inmuebles'),
         actions: [
           IconButton(
-            onPressed: () => ref.invalidate(dashboardStatsProvider),
+            onPressed: () {
+              ref.invalidate(dashboardStatsProvider);
+              ref.invalidate(buildingProvider);
+            },
             icon: const Icon(Icons.refresh_rounded),
           ),
           IconButton(
@@ -139,33 +142,63 @@ class DashboardScreen extends ConsumerWidget {
                 ),
               ),
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, s) => Text('Error al cargar stats: $e'),
+              error: (e, s) => const SizedBox.shrink(),
             ),
             const SizedBox(height: 30),
             // Listado de Inmuebles
-            if (buildings.isEmpty)
-              const Center(
+            buildings.when(
+              data: (list) {
+                if (list.isEmpty) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(40.0),
+                      child: Text(
+                        'No tienes inmuebles registrados',
+                        style: TextStyle(color: Colors.white54),
+                      ),
+                    ),
+                  );
+                }
+                return ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: list.length,
+                  itemBuilder: (context, index) {
+                    final b = list[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 16.0),
+                      child: _BuildingCard(building: b),
+                    );
+                  },
+                );
+              },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, s) => Center(
                 child: Padding(
-                  padding: EdgeInsets.all(40.0),
-                  child: Text(
-                    'No tienes inmuebles registrados',
-                    style: TextStyle(color: Colors.white54),
+                  padding: const EdgeInsets.symmetric(vertical: 40.0),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.wifi_off_rounded,
+                        size: 48,
+                        color: Colors.white24,
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Parece que no tienes conexión',
+                        style: TextStyle(color: Colors.white70, fontSize: 16),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        onPressed: () => ref.invalidate(buildingProvider),
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: const Text('Reintentar'),
+                      ),
+                    ],
                   ),
                 ),
-              )
-            else
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: buildings.length,
-                itemBuilder: (context, index) {
-                  final b = buildings[index];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 16.0),
-                    child: _BuildingCard(building: b),
-                  );
-                },
               ),
+            ),
             const SizedBox(height: 100), // Espacio para el FAB
           ],
         ),
@@ -174,7 +207,9 @@ class DashboardScreen extends ConsumerWidget {
       floatingActionButton: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         child: ElevatedButton.icon(
-          onPressed: () => _showAddBuildingDialog(context, ref),
+          onPressed: buildings.hasError
+              ? null
+              : () => _showAddBuildingDialog(context, ref),
           icon: const Icon(Icons.add),
           label: const Text('Agregar Inmueble'),
         ),
@@ -211,6 +246,7 @@ class DashboardScreen extends ConsumerWidget {
             const SizedBox(height: 20),
             TextField(
               controller: nameController,
+              textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(
                 labelText: 'Nombre (Ej: Casa Ibagué)',
               ),
@@ -218,6 +254,7 @@ class DashboardScreen extends ConsumerWidget {
             const SizedBox(height: 15),
             TextField(
               controller: addressController,
+              textCapitalization: TextCapitalization.words,
               decoration: const InputDecoration(labelText: 'Dirección'),
             ),
             const SizedBox(height: 30),
@@ -225,8 +262,8 @@ class DashboardScreen extends ConsumerWidget {
               onPressed: () {
                 if (nameController.text.isNotEmpty) {
                   final b = Building(
-                    name: nameController.text,
-                    address: addressController.text,
+                    name: nameController.text.trim(),
+                    address: addressController.text.trim(),
                   );
                   ref.read(buildingProvider.notifier).addBuilding(b);
                   Navigator.pop(context);

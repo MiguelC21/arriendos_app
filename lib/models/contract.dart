@@ -27,28 +27,28 @@ class Contract {
   Map<String, dynamic> toMap() {
     return {
       'id': id,
-      'apartamentoId': unitId,
-      'nombreInquilino': tenantName,
-      'telefono': phone,
-      'fechaInicio': startDate.toIso8601String(),
-      'fechaFin': endDate?.toIso8601String(),
-      'valorContrato': contractValue,
-      'activo': active ? 1 : 0,
-      'creadoEn': createdAt.toIso8601String(),
+      'unit_id': unitId,
+      'tenant_name': tenantName,
+      'phone': phone,
+      'start_date': startDate.toIso8601String(),
+      'end_date': endDate?.toIso8601String(),
+      'contract_value': contractValue,
+      'active': active,
+      'created_at': createdAt.toIso8601String(),
     };
   }
 
   factory Contract.fromMap(Map<String, dynamic> map) {
     return Contract(
       id: map['id'],
-      unitId: map['apartamentoId'],
-      tenantName: map['nombreInquilino'],
-      phone: map['telefono'],
-      startDate: DateTime.parse(map['fechaInicio']),
-      endDate: map['fechaFin'] != null ? DateTime.parse(map['fechaFin']) : null,
-      contractValue: map['valorContrato'],
-      active: map['activo'] == 1,
-      createdAt: DateTime.parse(map['creadoEn']),
+      unitId: map['unit_id'],
+      tenantName: map['tenant_name'],
+      phone: map['phone'],
+      startDate: DateTime.parse(map['start_date']),
+      endDate: map['end_date'] != null ? DateTime.parse(map['end_date']) : null,
+      contractValue: (map['contract_value'] as num).toDouble(),
+      active: map['active'] ?? true,
+      createdAt: DateTime.parse(map['created_at']),
     );
   }
 

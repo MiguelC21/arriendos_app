@@ -1,27 +1,27 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/unit.dart';
-import '../services/database_helper.dart';
+import '../services/supabase_service.dart';
 import 'building_stats_provider.dart';
 
 class UnitNotifier extends StateNotifier<Map<String, List<Unit>>> {
-  final DatabaseHelper _dbHelper;
+  final SupabaseService _supabaseService;
 
-  UnitNotifier(this._dbHelper) : super({});
+  UnitNotifier(this._supabaseService) : super({});
 
   Future<void> loadUnitsForBuilding(String buildingId) async {
-    final units = await _dbHelper.getUnitsForBuilding(buildingId);
+    final units = await _supabaseService.getUnits(buildingId);
     state = {...state, buildingId: units};
   }
 
   Future<void> addUnit(Unit unit, WidgetRef ref) async {
-    await _dbHelper.insertUnit(unit);
+    await _supabaseService.insertUnit(unit);
     await loadUnitsForBuilding(unit.buildingId);
     ref.invalidate(buildingDebtProvider(unit.buildingId));
     ref.invalidate(buildingOccupancyProvider(unit.buildingId));
   }
 
   Future<void> updateUnit(Unit unit, WidgetRef ref) async {
-    await _dbHelper.updateUnit(unit);
+    await _supabaseService.updateUnit(unit);
     await loadUnitsForBuilding(unit.buildingId);
     ref.invalidate(buildingDebtProvider(unit.buildingId));
     ref.invalidate(unitStatusProvider(unit.id));
@@ -33,7 +33,7 @@ class UnitNotifier extends StateNotifier<Map<String, List<Unit>>> {
     String buildingId,
     WidgetRef ref,
   ) async {
-    await _dbHelper.deleteUnit(unitId);
+    await _supabaseService.deleteUnit(unitId);
     await loadUnitsForBuilding(buildingId);
     ref.invalidate(buildingDebtProvider(buildingId));
     ref.invalidate(buildingOccupancyProvider(buildingId));
@@ -42,5 +42,5 @@ class UnitNotifier extends StateNotifier<Map<String, List<Unit>>> {
 
 final unitProvider =
     StateNotifierProvider<UnitNotifier, Map<String, List<Unit>>>((ref) {
-      return UnitNotifier(DatabaseHelper());
+      return UnitNotifier(SupabaseService());
     });
