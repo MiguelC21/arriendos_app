@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'local_storage_service.dart';
 import 'supabase_service.dart';
 import '../providers/building_provider.dart';
@@ -46,8 +47,18 @@ class SyncNotifier extends StateNotifier<SyncState> {
   final SupabaseService _supabaseService;
   final Ref? _ref;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+  RealtimeChannel? _realtimeChannel;
+  Timer? _realtimeDebounce;
   bool _isProcessing = false;
   bool _rerunRequested = false;
+
+  static const _realtimeTables = [
+    'buildings',
+    'units',
+    'contracts',
+    'monthly_payments',
+    'abonos',
+  ];
 
   SyncNotifier(this._supabaseService, {Ref? ref})
       : _ref = ref,
@@ -56,6 +67,52 @@ class SyncNotifier extends StateNotifier<SyncState> {
           pendingCount: LocalStorageService.getPendingSyncCount(),
         )) {
     _initConnectivityListener();
+    _subscribeToRealtimeChanges();
+  }
+
+  /// Escucha cambios en vivo (Supabase Realtime) en las tablas sincronizadas.
+  /// Cuando otro dispositivo inserta/actualiza/borra algo, este canal recibe
+  /// el evento y dispara una sincronización automática, sin que el usuario
+  /// tenga que pulsar "Sincronizar ahora".
+  void _subscribeToRealtimeChanges() {
+    final channel = SupabaseService.client.channel('sync_changes_${DateTime.now().microsecondsSinceEpoch}');
+
+    for (final table in _realtimeTables) {
+      channel.onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: table,
+        callback: (payload) => _scheduleRealtimeSync(),
+      );
+    }
+
+    channel.subscribe((status, error) {
+      if (status == RealtimeSubscribeStatus.channelError ||
+          status == RealtimeSubscribeStatus.timedOut) {
+        debugPrint('⚠️ Realtime: $status $error');
+      }
+    });
+    _realtimeChannel = channel;
+  }
+
+  /// Agrupa (debounce) varios eventos que lleguen juntos —p. ej. al borrar un
+  /// inmueble completo, que arrastra apartamentos/contratos/pagos en cascada—
+  /// en una sola sincronización, en vez de disparar una por cada tabla.
+  void _scheduleRealtimeSync() {
+    _realtimeDebounce?.cancel();
+    _realtimeDebounce = Timer(const Duration(milliseconds: 800), () {
+      syncAll();
+    });
+  }
+
+  Future<void> _unsubscribeRealtimeChanges() async {
+    _realtimeDebounce?.cancel();
+    _realtimeDebounce = null;
+    final channel = _realtimeChannel;
+    _realtimeChannel = null;
+    if (channel != null) {
+      await channel.unsubscribe();
+    }
   }
 
   void _initConnectivityListener() {
@@ -82,11 +139,19 @@ class SyncNotifier extends StateNotifier<SyncState> {
   @override
   void dispose() {
     _connectivitySubscription?.cancel();
+    _realtimeDebounce?.cancel();
+    _realtimeChannel?.unsubscribe();
     super.dispose();
   }
 
-  /// Se ejecuta cuando el usuario conmuta de entorno
+  /// Se ejecuta cuando el usuario conmuta de entorno (Local ↔ Producción).
+  /// SupabaseService ya apunta al nuevo cliente en este punto, así que hay
+  /// que re-suscribir el canal de Realtime a ese cliente nuevo (el anterior
+  /// quedaría escuchando al servidor equivocado).
   Future<void> onEnvironmentChanged() async {
+    await _unsubscribeRealtimeChanges();
+    _subscribeToRealtimeChanges();
+
     state = state.copyWith(
       pendingCount: LocalStorageService.getPendingSyncCount(),
       lastError: null,
