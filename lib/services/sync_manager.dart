@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'local_storage_service.dart';
 import 'supabase_service.dart';
 import '../providers/building_provider.dart';
+import '../providers/building_stats_provider.dart';
 import '../providers/dashboard_provider.dart';
 import '../providers/tenant_provider.dart';
 
@@ -126,6 +127,13 @@ class SyncNotifier extends StateNotifier<SyncState> {
       _ref?.invalidate(buildingProvider);
       _ref?.invalidate(dashboardStatsProvider);
       _ref?.invalidate(activeTenantsProvider);
+      // Estos son FutureProvider.family: invalidar sin argumento recalcula
+      // todas sus instancias vivas, para que las tarjetas de ocupación/deuda
+      // reflejen lo que la reconciliación acaba de corregir en Hive.
+      _ref?.invalidate(buildingOccupancyProvider);
+      _ref?.invalidate(buildingDebtProvider);
+      _ref?.invalidate(unitStatusProvider);
+      _ref?.invalidate(unitDebtProvider);
     } catch (e) {
       debugPrint('Error durante syncAll: $e');
       state = state.copyWith(
@@ -190,36 +198,29 @@ class SyncNotifier extends StateNotifier<SyncState> {
     }
   }
 
-  /// Descarga todos los registros actuales de Supabase a la base local
+  /// Descarga todos los registros actuales de Supabase y reconcilia la base
+  /// local con esa verdad remota: guarda lo que llega y elimina en cascada
+  /// lo que ya no exista remotamente (p. ej. algo borrado desde otro
+  /// dispositivo), para que ningún cliente se quede con datos fantasma.
   Future<void> _syncDown() async {
     try {
       final buildings = await _supabaseService.getBuildings();
-      if (buildings.isNotEmpty) {
-        await LocalStorageService.saveBuildingsBatch(buildings);
-      }
+      await LocalStorageService.reconcileBuildings(buildings);
 
       for (var b in buildings) {
         final units = await _supabaseService.getUnits(b.id);
-        if (units.isNotEmpty) {
-          await LocalStorageService.saveUnitsBatch(units);
-        }
+        await LocalStorageService.reconcileUnitsForBuilding(b.id, units);
 
         final contracts = await _supabaseService.getActiveContractsForBuilding(b.id);
-        if (contracts.isNotEmpty) {
-          await LocalStorageService.saveContractsBatch(contracts);
-        }
+        await LocalStorageService.reconcileContractsForBuilding(b.id, contracts);
 
         for (var c in contracts) {
           final payments = await _supabaseService.getPayments(c.id);
-          if (payments.isNotEmpty) {
-            await LocalStorageService.saveMonthlyPaymentsBatch(payments);
-          }
+          await LocalStorageService.reconcilePaymentsForContract(c.id, payments);
 
           for (var p in payments) {
             final abonos = await _supabaseService.getAbonosForPayment(p.id);
-            if (abonos.isNotEmpty) {
-              await LocalStorageService.saveAbonosBatch(abonos);
-            }
+            await LocalStorageService.reconcileAbonosForPayment(p.id, abonos);
           }
         }
       }

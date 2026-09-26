@@ -80,6 +80,34 @@ class LocalStorageService {
     }
   }
 
+  /// IDs con una mutación local aún pendiente de subir: nunca se podan por
+  /// reconciliación, para no borrar algo que este mismo dispositivo creó y
+  /// todavía no ha logrado subir al servidor.
+  static Set<String> _pendingMutationIds() {
+    return getPendingSyncQueue()
+        .map((item) => (item['data'] as Map?)?['id'])
+        .whereType<String>()
+        .toSet();
+  }
+
+  /// Reconcilia el directorio de inmuebles con la verdad remota: guarda los
+  /// que llegan y elimina en cascada (local) los que ya no existen en el
+  /// servidor (p. ej. borrados desde otro dispositivo). Si esto llegara a
+  /// podar de más por una respuesta remota espuria, la propia lógica de
+  /// lectura (`AppRepository.getBuildings`: caché vacía → reintenta remoto)
+  /// se autocorrige en la siguiente consulta.
+  static Future<void> reconcileBuildings(List<Building> remoteBuildings) async {
+    final local = getAllBuildings();
+    final protectedIds = _pendingMutationIds();
+    final remoteIds = remoteBuildings.map((b) => b.id).toSet();
+    for (var b in local) {
+      if (!remoteIds.contains(b.id) && !protectedIds.contains(b.id)) {
+        await deleteBuilding(b.id);
+      }
+    }
+    await saveBuildingsBatch(remoteBuildings);
+  }
+
   // ==========================================
   // 🏢 UNITS
   // ==========================================
@@ -122,16 +150,22 @@ class LocalStorageService {
     // se arrastra su contrato y los pagos/abonos asociados.
     final contract = getActiveContractForUnit(id);
     if (contract != null) {
-      final payments = getPaymentsForContract(contract.id);
-      for (var p in payments) {
-        for (var a in getAbonosForPayment(p.id)) {
-          await _abonosBox.delete(a.id);
-        }
-        await _paymentsBox.delete(p.id);
-      }
-      await _contractsBox.delete(contract.id);
+      await _deleteContractCascade(contract.id);
     }
     await _unitsBox.delete(id);
+  }
+
+  /// Reconcilia los apartamentos de un inmueble con la verdad remota.
+  static Future<void> reconcileUnitsForBuilding(String buildingId, List<Unit> remoteUnits) async {
+    final local = getUnitsForBuilding(buildingId);
+    final protectedIds = _pendingMutationIds();
+    final remoteIds = remoteUnits.map((u) => u.id).toSet();
+    for (var u in local) {
+      if (!remoteIds.contains(u.id) && !protectedIds.contains(u.id)) {
+        await deleteUnit(u.id);
+      }
+    }
+    await saveUnitsBatch(remoteUnits);
   }
 
   // ==========================================
@@ -223,6 +257,35 @@ class LocalStorageService {
     await _contractsBox.delete(id);
   }
 
+  static Future<void> _deleteContractCascade(String contractId) async {
+    final payments = getPaymentsForContract(contractId);
+    for (var p in payments) {
+      for (var a in getAbonosForPayment(p.id)) {
+        await _abonosBox.delete(a.id);
+      }
+      await _paymentsBox.delete(p.id);
+    }
+    await _contractsBox.delete(contractId);
+  }
+
+  /// Reconcilia los contratos activos de un inmueble con la verdad remota
+  /// (p. ej. un contrato finalizado en otro dispositivo debe desaparecer
+  /// aquí también, arrastrando sus pagos y abonos).
+  static Future<void> reconcileContractsForBuilding(
+    String buildingId,
+    List<Contract> remoteContracts,
+  ) async {
+    final local = getActiveContractsForBuilding(buildingId);
+    final protectedIds = _pendingMutationIds();
+    final remoteIds = remoteContracts.map((c) => c.id).toSet();
+    for (var c in local) {
+      if (!remoteIds.contains(c.id) && !protectedIds.contains(c.id)) {
+        await _deleteContractCascade(c.id);
+      }
+    }
+    await saveContractsBatch(remoteContracts);
+  }
+
   // ==========================================
   // 💰 MONTHLY PAYMENTS
   // ==========================================
@@ -283,6 +346,25 @@ class LocalStorageService {
     await _paymentsBox.putAll(map);
   }
 
+  /// Reconcilia los pagos mensuales de un contrato con la verdad remota.
+  static Future<void> reconcilePaymentsForContract(
+    String contractId,
+    List<MonthlyPayment> remotePayments,
+  ) async {
+    final local = getPaymentsForContract(contractId);
+    final protectedIds = _pendingMutationIds();
+    final remoteIds = remotePayments.map((p) => p.id).toSet();
+    for (var p in local) {
+      if (!remoteIds.contains(p.id) && !protectedIds.contains(p.id)) {
+        for (var a in getAbonosForPayment(p.id)) {
+          await _abonosBox.delete(a.id);
+        }
+        await _paymentsBox.delete(p.id);
+      }
+    }
+    await saveMonthlyPaymentsBatch(remotePayments);
+  }
+
   // ==========================================
   // 💵 ABONOS
   // ==========================================
@@ -314,6 +396,22 @@ class LocalStorageService {
   static Future<void> saveAbonosBatch(List<Abono> abonos) async {
     final map = {for (var a in abonos) a.id: a.toMap()};
     await _abonosBox.putAll(map);
+  }
+
+  /// Reconcilia los abonos de un pago mensual con la verdad remota.
+  static Future<void> reconcileAbonosForPayment(
+    String paymentId,
+    List<Abono> remoteAbonos,
+  ) async {
+    final local = getAbonosForPayment(paymentId);
+    final protectedIds = _pendingMutationIds();
+    final remoteIds = remoteAbonos.map((a) => a.id).toSet();
+    for (var a in local) {
+      if (!remoteIds.contains(a.id) && !protectedIds.contains(a.id)) {
+        await _abonosBox.delete(a.id);
+      }
+    }
+    await saveAbonosBatch(remoteAbonos);
   }
 
   static Future<void> deleteAbono(String id) async {

@@ -862,6 +862,7 @@ class _PaymentHistoryList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final paymentsAsync = ref.watch(paymentProvider(contract.id));
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final currencyFormat = NumberFormat.currency(
       locale: 'es_CO',
       symbol: '\$',
@@ -871,9 +872,11 @@ class _PaymentHistoryList extends ConsumerWidget {
     return paymentsAsync.when(
       data: (payments) {
         if (payments.isEmpty) {
-          return const Text(
+          return Text(
             'Sin historial de pagos.',
-            style: TextStyle(color: Colors.white54),
+            style: TextStyle(
+              color: isDark ? Colors.white54 : const Color(0xFF64748B),
+            ),
           );
         }
         return ListView.builder(
@@ -904,14 +907,17 @@ class _PaymentHistoryList extends ConsumerWidget {
                   ),
                   title: Text(
                     '$monthName ${p.year}',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
                     ),
                   ),
                   subtitle: Text(
                     '${currencyFormat.format(p.paidValue)} / ${currencyFormat.format(p.totalValue)}',
-                    style: const TextStyle(color: Colors.white54, fontSize: 13),
+                    style: TextStyle(
+                      color: isDark ? Colors.white54 : const Color(0xFF64748B),
+                      fontSize: 13,
+                    ),
                   ),
                   trailing: _StatusBadge(
                     status: p.status.name,
@@ -925,12 +931,12 @@ class _PaymentHistoryList extends ConsumerWidget {
                         return abonosAsync.when(
                           data: (abonos) {
                             if (abonos.isEmpty) {
-                              return const Padding(
-                                padding: EdgeInsets.all(15),
+                              return Padding(
+                                padding: const EdgeInsets.all(15),
                                 child: Text(
                                   'Sin abonos registrados',
                                   style: TextStyle(
-                                    color: Colors.white38,
+                                    color: isDark ? Colors.white38 : const Color(0xFF94A3B8),
                                     fontSize: 12,
                                   ),
                                 ),
@@ -938,9 +944,9 @@ class _PaymentHistoryList extends ConsumerWidget {
                             }
                             return Column(
                               children: [
-                                const Divider(
+                                Divider(
                                   height: 1,
-                                  color: Colors.white12,
+                                  color: isDark ? Colors.white12 : const Color(0xFFE2E8F0),
                                   indent: 15,
                                   endIndent: 15,
                                 ),
@@ -965,8 +971,8 @@ class _PaymentHistoryList extends ConsumerWidget {
                                     ),
                                     subtitle: Text(
                                       'Fecha: ${fullDateTime[0].toUpperCase()}${fullDateTime.substring(1)}',
-                                      style: const TextStyle(
-                                        color: Colors.white38,
+                                      style: TextStyle(
+                                        color: isDark ? Colors.white38 : const Color(0xFF94A3B8),
                                         fontSize: 12,
                                       ),
                                     ),
@@ -981,16 +987,16 @@ class _PaymentHistoryList extends ConsumerWidget {
                                           context: context,
                                           builder: (context) => AlertDialog(
                                             backgroundColor: Theme.of(context).cardColor,
-                                            title: const Text(
+                                            title: Text(
                                               '¿Deshacer Pago?',
                                               style: TextStyle(
-                                                color: Colors.white,
+                                                color: isDark ? Colors.white : const Color(0xFF0F172A),
                                               ),
                                             ),
-                                            content: const Text(
+                                            content: Text(
                                               'Esta acción eliminará el abono y ajustará el saldo pendiente del mes. ¿Deseas continuar?',
                                               style: TextStyle(
-                                                color: Colors.white70,
+                                                color: isDark ? Colors.white70 : const Color(0xFF475569),
                                               ),
                                             ),
                                             actions: [
