@@ -118,6 +118,19 @@ class LocalStorageService {
   }
 
   static Future<void> deleteUnit(String id) async {
+    // Réplica local del ON DELETE CASCADE remoto: al borrar la unidad,
+    // se arrastra su contrato y los pagos/abonos asociados.
+    final contract = getActiveContractForUnit(id);
+    if (contract != null) {
+      final payments = getPaymentsForContract(contract.id);
+      for (var p in payments) {
+        for (var a in getAbonosForPayment(p.id)) {
+          await _abonosBox.delete(a.id);
+        }
+        await _paymentsBox.delete(p.id);
+      }
+      await _contractsBox.delete(contract.id);
+    }
     await _unitsBox.delete(id);
   }
 

@@ -586,13 +586,17 @@ class _UnitCard extends ConsumerWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    unit.number,
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: -0.3,
-                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                  Expanded(
+                    child: Text(
+                      unit.number,
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.3,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   if (contract != null)
@@ -603,6 +607,18 @@ class _UnitCard extends ConsumerWidget {
                         )
                   else
                     const StatusBadge(status: 'Disponible'),
+                  IconButton(
+                    tooltip: 'Eliminar Apartamento',
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: () => _showDeleteUnitConfirmDialog(context, ref),
+                    icon: const Icon(
+                      Icons.delete_outline_rounded,
+                      size: 18,
+                      color: Color(0xFFEF4444),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 6),
@@ -662,6 +678,37 @@ class _UnitCard extends ConsumerWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _showDeleteUnitConfirmDialog(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('¿Eliminar Apartamento?'),
+        content: Text(
+          'Esta acción eliminará "${unit.number}" junto con su contrato y pagos asociados de forma permanente.\n\n¿Deseas continuar?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              minimumSize: const Size(120, 44),
+            ),
+            onPressed: () async {
+              Navigator.pop(context);
+              await ref
+                  .read(unitProvider.notifier)
+                  .deleteUnit(unit.id, unit.buildingId, ref);
+            },
+            child: const Text('Eliminar'),
+          ),
+        ],
       ),
     );
   }
