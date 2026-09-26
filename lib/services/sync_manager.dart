@@ -46,6 +46,7 @@ class SyncNotifier extends StateNotifier<SyncState> {
   final Ref? _ref;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   bool _isProcessing = false;
+  bool _rerunRequested = false;
 
   SyncNotifier(this._supabaseService, {Ref? ref})
       : _ref = ref,
@@ -94,7 +95,12 @@ class SyncNotifier extends StateNotifier<SyncState> {
 
   /// Sincroniza todo: primero procesa mutaciones pendientes de subida, luego descarga cambios
   Future<void> syncAll() async {
-    if (_isProcessing) return;
+    if (_isProcessing) {
+      // Ya hay una sincronización en curso: pedimos que se repita al terminar
+      // para no perder mutaciones encoladas mientras esta pasada estaba en vuelo.
+      _rerunRequested = true;
+      return;
+    }
     _isProcessing = true;
 
     state = state.copyWith(
@@ -129,41 +135,59 @@ class SyncNotifier extends StateNotifier<SyncState> {
       );
     } finally {
       _isProcessing = false;
+
+      if (_rerunRequested) {
+        // Llegaron mutaciones nuevas mientras sincronizábamos: repetimos
+        // para no dejarlas huérfanas en la cola hasta el próximo disparador.
+        _rerunRequested = false;
+        unawaited(syncAll());
+      }
     }
   }
 
-  /// Procesa la cola de mutaciones acumuladas en modo offline
+  /// Procesa la cola de mutaciones acumuladas en modo offline.
+  /// Vuelve a leer la cola tras cada pasada para no dejar fuera elementos
+  /// que se encolaron mientras esta misma pasada estaba en curso.
   Future<void> _processPendingQueue() async {
-    final queue = LocalStorageService.getPendingSyncQueue();
-    if (queue.isEmpty) return;
+    while (true) {
+      final queue = LocalStorageService.getPendingSyncQueue();
+      if (queue.isEmpty) return;
 
-    debugPrint('🔄 Procesando cola de sincronización (${queue.length} elementos)...');
+      debugPrint('🔄 Procesando cola de sincronización (${queue.length} elementos)...');
 
-    for (var item in queue) {
-      final queueId = item['id'] as String;
-      final table = item['table'] as String;
-      final action = item['action'] as String;
-      final data = Map<String, dynamic>.from(item['data'] as Map);
+      bool hadError = false;
+      for (var item in queue) {
+        final queueId = item['id'] as String;
+        final table = item['table'] as String;
+        final action = item['action'] as String;
+        final data = Map<String, dynamic>.from(item['data'] as Map);
 
-      try {
-        await _supabaseService.executeSyncAction(
-          table: table,
-          action: action,
-          data: data,
-        );
-        // Éxito: eliminar de la cola local
-        await LocalStorageService.removeFromSyncQueue(queueId);
-      } catch (e) {
-        debugPrint('Error procesando item $queueId de tabla $table: $e');
-        state = state.copyWith(lastError: e.toString());
-        // Si hay error, paramos para reintentar luego
-        break;
+        try {
+          await _supabaseService.executeSyncAction(
+            table: table,
+            action: action,
+            data: data,
+          );
+          // Éxito: eliminar de la cola local
+          await LocalStorageService.removeFromSyncQueue(queueId);
+        } catch (e) {
+          debugPrint('Error procesando item $queueId de tabla $table: $e');
+          state = state.copyWith(lastError: e.toString());
+          hadError = true;
+          // Si hay error, paramos para reintentar luego
+          break;
+        }
       }
-    }
 
-    state = state.copyWith(
-      pendingCount: LocalStorageService.getPendingSyncCount(),
-    );
+      state = state.copyWith(
+        pendingCount: LocalStorageService.getPendingSyncCount(),
+      );
+
+      // Si hubo un error nos detenemos por completo (se reintentará con el
+      // próximo disparador). Si no, volvemos a leer la cola por si se
+      // añadieron elementos nuevos durante esta pasada.
+      if (hadError) return;
+    }
   }
 
   /// Descarga todos los registros actuales de Supabase a la base local
