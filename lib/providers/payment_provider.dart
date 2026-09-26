@@ -1,22 +1,23 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/monthly_payment.dart';
 import '../models/abono.dart';
-import '../services/supabase_service.dart';
+import '../repositories/app_repository.dart';
+import 'repository_provider.dart';
 import 'dashboard_provider.dart';
 import 'building_stats_provider.dart';
 
 class PaymentNotifier extends StateNotifier<AsyncValue<List<MonthlyPayment>>> {
-  final SupabaseService _supabaseService;
+  final AppRepository _repository;
   final String contractId;
 
-  PaymentNotifier(this._supabaseService, this.contractId)
-    : super(const AsyncValue.loading()) {
+  PaymentNotifier(this._repository, this.contractId)
+      : super(const AsyncValue.loading()) {
     loadPayments();
   }
 
-  Future<void> loadPayments() async {
+  Future<void> loadPayments({bool forceRemote = false}) async {
     try {
-      final payments = await _supabaseService.getPayments(contractId);
+      final payments = await _repository.getPayments(contractId, forceRemote: forceRemote);
       if (!mounted) return;
       state = AsyncValue.data(payments);
     } catch (e, st) {
@@ -32,7 +33,7 @@ class PaymentNotifier extends StateNotifier<AsyncValue<List<MonthlyPayment>>> {
     String unitId,
     WidgetRef ref,
   ) async {
-    await _supabaseService.insertAbono(abono);
+    await _repository.addAbono(abono);
     await loadPayments();
     if (!mounted) return;
     _invalidateStats(ref, buildingId, unitId);
@@ -45,11 +46,36 @@ class PaymentNotifier extends StateNotifier<AsyncValue<List<MonthlyPayment>>> {
     required String unitId,
     required WidgetRef ref,
   }) async {
-    await _supabaseService.applyCascadingPayment(
-      totalAmount: totalAmount,
-      method: method,
-      contractId: contractId,
-    );
+    // Aplicar pago en cascada de forma local-first
+    final payments = await _repository.getPayments(contractId);
+    final pendingPayments = payments
+        .where((p) => p.paidValue < p.totalValue)
+        .toList();
+
+    // Ordenar ascendente por año y mes
+    pendingPayments.sort((a, b) {
+      final y = a.year.compareTo(b.year);
+      if (y != 0) return y;
+      return a.month.compareTo(b.month);
+    });
+
+    double remaining = totalAmount;
+    for (var p in pendingPayments) {
+      if (remaining <= 0) break;
+      final pendingAmount = p.totalValue - p.paidValue;
+      final toApply = remaining >= pendingAmount ? pendingAmount : remaining;
+
+      await _repository.addAbono(
+        Abono(
+          paymentId: p.id,
+          amount: toApply,
+          date: DateTime.now(),
+          note: 'Pago en cascada ($method)',
+        ),
+      );
+
+      remaining -= toApply;
+    }
 
     await loadPayments();
     if (!mounted) return;
@@ -62,7 +88,7 @@ class PaymentNotifier extends StateNotifier<AsyncValue<List<MonthlyPayment>>> {
     required String unitId,
     required WidgetRef ref,
   }) async {
-    await _supabaseService.deleteAbono(abonoId);
+    await _repository.deleteAbono(abonoId);
     await loadPayments();
     if (!mounted) return;
     _invalidateStats(ref, buildingId, unitId);
@@ -83,12 +109,14 @@ final paymentProvider =
       AsyncValue<List<MonthlyPayment>>,
       String
     >((ref, contractId) {
-      return PaymentNotifier(SupabaseService(), contractId);
+      final repository = ref.watch(appRepositoryProvider);
+      return PaymentNotifier(repository, contractId);
     });
 
 final abonosProvider = FutureProvider.family<List<Abono>, String>((
   ref,
   paymentId,
 ) async {
-  return await SupabaseService().getAbonosForPayment(paymentId);
+  final repository = ref.watch(appRepositoryProvider);
+  return await repository.getAbonosForPayment(paymentId);
 });

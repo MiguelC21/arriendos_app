@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../services/supabase_service.dart';
+import 'repository_provider.dart';
 
 class TenantInfo {
   final String name;
@@ -20,21 +20,22 @@ class TenantInfo {
 }
 
 final activeTenantsProvider = FutureProvider<List<TenantInfo>>((ref) async {
-  final supabaseService = SupabaseService();
-  final List<dynamic> results = await supabaseService.getActiveTenants();
+  final repository = ref.watch(appRepositoryProvider);
+  final List<dynamic> results = await repository.getActiveTenants();
 
   return results.map((res) {
-    // Supabase devuelve el join como objetos anidados
     final unit = res['units'];
     final building = unit != null ? unit['buildings'] : null;
 
+    final phone = (res['phone'] ?? res['tenant_phone'] ?? '') as String;
+
     return TenantInfo(
-      name: res['tenant_name'] as String,
-      phone: res['tenant_phone'] as String? ?? '',
-      unitNumber: unit != null ? unit['number'] as String : '?',
-      unitId: res['unit_id'] as String,
-      buildingName: building != null ? building['name'] as String : '?',
-      buildingId: unit != null ? unit['building_id'] as String : '?',
+      name: (res['tenant_name'] ?? '') as String,
+      phone: phone,
+      unitNumber: unit != null ? (unit['number'] ?? '?') as String : '?',
+      unitId: (res['unit_id'] ?? '') as String,
+      buildingName: building != null ? (building['name'] ?? '?') as String : '?',
+      buildingId: unit != null ? (unit['building_id'] ?? '?') as String : '?',
     );
   }).toList();
 });

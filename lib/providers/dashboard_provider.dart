@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../services/supabase_service.dart';
+import 'repository_provider.dart';
 
 class DashboardStats {
   final double totalExpected;
@@ -12,18 +12,20 @@ class DashboardStats {
     this.activeTenants = 0,
   });
 
-  double get progress => totalExpected > 0 ? totalPaid / totalExpected : 0.0;
+  double get progress => totalExpected > 0 ? (totalPaid / totalExpected).clamp(0.0, 1.0) : 0.0;
+  double get pendingDebt => (totalExpected - totalPaid) > 0 ? (totalExpected - totalPaid) : 0.0;
+  int get occupancyRatePercentage => activeTenants > 0 ? 100 : 0;
 }
 
 final dashboardStatsProvider = FutureProvider<DashboardStats>((ref) async {
-  final supabaseService = SupabaseService();
+  final repository = ref.watch(appRepositoryProvider);
   final now = DateTime.now();
 
-  final stats = await supabaseService.getDashboardStats(now.month, now.year);
+  final stats = await repository.getDashboardStats(now.month, now.year);
 
   return DashboardStats(
-    totalExpected: stats['totalExpected'],
-    totalPaid: stats['totalPaid'],
-    activeTenants: stats['activeCount'],
+    totalExpected: (stats['totalExpected'] as num?)?.toDouble() ?? 0.0,
+    totalPaid: (stats['totalPaid'] as num?)?.toDouble() ?? 0.0,
+    activeTenants: (stats['activeCount'] as num?)?.toInt() ?? 0,
   );
 });

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../config/environment_config.dart';
 import '../models/building.dart';
 import '../models/unit.dart';
 import '../models/contract.dart';
@@ -7,7 +8,22 @@ import '../models/monthly_payment.dart';
 import '../models/abono.dart';
 
 class SupabaseService {
-  final _client = Supabase.instance.client;
+  static SupabaseClient? _clientInstance;
+
+  static SupabaseClient get client => _clientInstance ??= SupabaseClient(
+        EnvironmentConfig.currentUrl,
+        EnvironmentConfig.currentAnonKey,
+      );
+
+  static void switchEnvironment() {
+    _clientInstance = SupabaseClient(
+      EnvironmentConfig.currentUrl,
+      EnvironmentConfig.currentAnonKey,
+    );
+    debugPrint('⚡ SupabaseService conmutó al endpoint: ${EnvironmentConfig.currentUrl}');
+  }
+
+  SupabaseClient get _client => client;
 
   // 🏠 BUILDINGS
   Future<List<Building>> getBuildings() async {
@@ -361,4 +377,32 @@ class SupabaseService {
       'activeCount': activeCount,
     };
   }
+
+  // 🔄 SYNC QUEUE EXECUTION
+  Future<void> executeSyncAction({
+    required String table,
+    required String action,
+    required Map<String, dynamic> data,
+  }) async {
+    final id = data['id'];
+    switch (action.toLowerCase()) {
+      case 'insert':
+      case 'upsert':
+        await _client.from(table).upsert(data);
+        break;
+      case 'update':
+        if (id != null) {
+          await _client.from(table).update(data).eq('id', id);
+        }
+        break;
+      case 'delete':
+        if (id != null) {
+          await _client.from(table).delete().eq('id', id);
+        }
+        break;
+      default:
+        debugPrint('Acción de sincronización desconocida: $action');
+    }
+  }
 }
+

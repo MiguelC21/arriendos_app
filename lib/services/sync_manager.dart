@@ -1,0 +1,217 @@
+import 'dart:async';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'local_storage_service.dart';
+import 'supabase_service.dart';
+import '../providers/building_provider.dart';
+import '../providers/dashboard_provider.dart';
+import '../providers/tenant_provider.dart';
+
+enum SyncConnectionState { online, offline, syncing }
+
+class SyncState {
+  final SyncConnectionState connectionState;
+  final int pendingCount;
+  final String? lastError;
+  final DateTime? lastSyncTime;
+
+  const SyncState({
+    required this.connectionState,
+    required this.pendingCount,
+    this.lastError,
+    this.lastSyncTime,
+  });
+
+  bool get isOnline => connectionState != SyncConnectionState.offline;
+  bool get isSyncing => connectionState == SyncConnectionState.syncing;
+
+  SyncState copyWith({
+    SyncConnectionState? connectionState,
+    int? pendingCount,
+    String? lastError,
+    DateTime? lastSyncTime,
+  }) {
+    return SyncState(
+      connectionState: connectionState ?? this.connectionState,
+      pendingCount: pendingCount ?? this.pendingCount,
+      lastError: lastError,
+      lastSyncTime: lastSyncTime ?? this.lastSyncTime,
+    );
+  }
+}
+
+class SyncNotifier extends StateNotifier<SyncState> {
+  final SupabaseService _supabaseService;
+  final Ref? _ref;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+  bool _isProcessing = false;
+
+  SyncNotifier(this._supabaseService, {Ref? ref})
+      : _ref = ref,
+        super(SyncState(
+          connectionState: SyncConnectionState.online,
+          pendingCount: LocalStorageService.getPendingSyncCount(),
+        )) {
+    _initConnectivityListener();
+  }
+
+  void _initConnectivityListener() {
+    _connectivitySubscription = Connectivity()
+        .onConnectivityChanged
+        .listen((List<ConnectivityResult> results) {
+      final isOffline = results.every((r) => r == ConnectivityResult.none);
+      if (isOffline) {
+        state = state.copyWith(
+          connectionState: SyncConnectionState.offline,
+          pendingCount: LocalStorageService.getPendingSyncCount(),
+        );
+      } else {
+        state = state.copyWith(
+          connectionState: SyncConnectionState.online,
+          pendingCount: LocalStorageService.getPendingSyncCount(),
+        );
+        // Si vuelve la conexión, procesar inmediatamente la cola pendiente y descargar
+        syncAll();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _connectivitySubscription?.cancel();
+    super.dispose();
+  }
+
+  /// Se ejecuta cuando el usuario conmuta de entorno
+  Future<void> onEnvironmentChanged() async {
+    state = state.copyWith(
+      pendingCount: LocalStorageService.getPendingSyncCount(),
+      lastError: null,
+    );
+    await syncAll();
+  }
+
+  /// Sincroniza todo: primero procesa mutaciones pendientes de subida, luego descarga cambios
+  Future<void> syncAll() async {
+    if (_isProcessing) return;
+    _isProcessing = true;
+
+    state = state.copyWith(
+      connectionState: SyncConnectionState.syncing,
+      pendingCount: LocalStorageService.getPendingSyncCount(),
+    );
+
+    try {
+      // 1. Subir cambios pendientes locales a Supabase
+      await _processPendingQueue();
+
+      // 2. Descargar datos frescos de Supabase a la base local
+      await _syncDown();
+
+      state = state.copyWith(
+        connectionState: SyncConnectionState.online,
+        pendingCount: LocalStorageService.getPendingSyncCount(),
+        lastSyncTime: DateTime.now(),
+        lastError: null,
+      );
+
+      // Notificar a Riverpod para refrescar UI inmediatamente con datos frescos
+      _ref?.invalidate(buildingProvider);
+      _ref?.invalidate(dashboardStatsProvider);
+      _ref?.invalidate(activeTenantsProvider);
+    } catch (e) {
+      debugPrint('Error durante syncAll: $e');
+      state = state.copyWith(
+        connectionState: SyncConnectionState.online,
+        pendingCount: LocalStorageService.getPendingSyncCount(),
+        lastError: e.toString(),
+      );
+    } finally {
+      _isProcessing = false;
+    }
+  }
+
+  /// Procesa la cola de mutaciones acumuladas en modo offline
+  Future<void> _processPendingQueue() async {
+    final queue = LocalStorageService.getPendingSyncQueue();
+    if (queue.isEmpty) return;
+
+    debugPrint('🔄 Procesando cola de sincronización (${queue.length} elementos)...');
+
+    for (var item in queue) {
+      final queueId = item['id'] as String;
+      final table = item['table'] as String;
+      final action = item['action'] as String;
+      final data = Map<String, dynamic>.from(item['data'] as Map);
+
+      try {
+        await _supabaseService.executeSyncAction(
+          table: table,
+          action: action,
+          data: data,
+        );
+        // Éxito: eliminar de la cola local
+        await LocalStorageService.removeFromSyncQueue(queueId);
+      } catch (e) {
+        debugPrint('Error procesando item $queueId de tabla $table: $e');
+        state = state.copyWith(lastError: e.toString());
+        // Si hay error, paramos para reintentar luego
+        break;
+      }
+    }
+
+    state = state.copyWith(
+      pendingCount: LocalStorageService.getPendingSyncCount(),
+    );
+  }
+
+  /// Descarga todos los registros actuales de Supabase a la base local
+  Future<void> _syncDown() async {
+    try {
+      final buildings = await _supabaseService.getBuildings();
+      if (buildings.isNotEmpty) {
+        await LocalStorageService.saveBuildingsBatch(buildings);
+      }
+
+      for (var b in buildings) {
+        final units = await _supabaseService.getUnits(b.id);
+        if (units.isNotEmpty) {
+          await LocalStorageService.saveUnitsBatch(units);
+        }
+
+        final contracts = await _supabaseService.getActiveContractsForBuilding(b.id);
+        if (contracts.isNotEmpty) {
+          await LocalStorageService.saveContractsBatch(contracts);
+        }
+
+        for (var c in contracts) {
+          final payments = await _supabaseService.getPayments(c.id);
+          if (payments.isNotEmpty) {
+            await LocalStorageService.saveMonthlyPaymentsBatch(payments);
+          }
+
+          for (var p in payments) {
+            final abonos = await _supabaseService.getAbonosForPayment(p.id);
+            if (abonos.isNotEmpty) {
+              await LocalStorageService.saveAbonosBatch(abonos);
+            }
+          }
+        }
+      }
+      debugPrint('📥 Datos sincronizados y guardados en almacenamiento local.');
+    } catch (e) {
+      debugPrint('Aviso: no se pudo completar syncDown (posiblemente offline): $e');
+    }
+  }
+
+  void notifyLocalMutation() {
+    state = state.copyWith(
+      pendingCount: LocalStorageService.getPendingSyncCount(),
+    );
+  }
+}
+
+final syncProvider = StateNotifierProvider<SyncNotifier, SyncState>((ref) {
+  return SyncNotifier(SupabaseService(), ref: ref);
+});

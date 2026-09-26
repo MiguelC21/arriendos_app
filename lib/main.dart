@@ -3,26 +3,45 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'config/environment_config.dart';
 import 'config/supabase_config.dart';
+import 'config/theme_config.dart';
+import 'providers/theme_provider.dart';
+import 'services/local_storage_service.dart';
 import 'screens/dashboard_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Supabase.initialize(
-    url: SupabaseConfig.url,
-    anonKey: SupabaseConfig.anonKey,
-  );
+  // 1. Inicializar configuración de entornos (Local vs Producción)
+  await EnvironmentConfig.initialize();
 
+  // 2. Inicializar base de datos local Hive CE para Local-First
+  await LocalStorageService.initialize();
+
+  // 3. Inicializar conexión Supabase con fallback seguro
+  try {
+    await Supabase.initialize(
+      url: SupabaseConfig.url,
+      anonKey: SupabaseConfig.anonKey,
+    );
+  } catch (e) {
+    debugPrint('Aviso: No se pudo conectar a Supabase al arrancar: $e');
+  }
+
+  // 4. Inicializar localización en español
   await initializeDateFormatting('es_ES', null);
+
   runApp(const ProviderScope(child: ArriendosApp()));
 }
 
-class ArriendosApp extends StatelessWidget {
+class ArriendosApp extends ConsumerWidget {
   const ArriendosApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final themeMode = ref.watch(themeModeProvider);
+
     return MaterialApp(
       title: 'Arriendos Premium',
       debugShowCheckedModeBanner: false,
@@ -33,50 +52,9 @@ class ArriendosApp extends StatelessWidget {
       ],
       supportedLocales: const [Locale('es', 'ES')],
       locale: const Locale('es', 'ES'),
-      theme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(
-          0xFF0F172A,
-        ), // Fondo azul oscuro profundo
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFF38BDF8), // Celeste vibrante
-          secondary: Color(0xFF10B981), // Verde esmeralda
-          surface: Color(0xFF1E293B), // Gris azulado para tarjetas
-          onSurface: Colors.white,
-        ),
-        cardTheme: CardThemeData(
-          color: const Color(0xFF1E293B),
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF0F172A),
-          elevation: 0,
-          centerTitle: false,
-          titleTextStyle: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF2563EB),
-            foregroundColor: Colors.white,
-            minimumSize: const Size(double.infinity, 56),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            textStyle: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-      ),
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: themeMode,
       home: const DashboardScreen(),
     );
   }

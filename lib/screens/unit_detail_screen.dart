@@ -9,6 +9,12 @@ import '../providers/building_stats_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../utils/formatters.dart';
 
+import '../widgets/connection_status_badge.dart';
+import '../widgets/status_badge.dart';
+import '../widgets/adaptive_dialog.dart';
+import '../widgets/responsive_layout.dart';
+import '../widgets/empty_state_view.dart';
+
 class UnitDetailScreen extends ConsumerStatefulWidget {
   final Unit unit;
   const UnitDetailScreen({super.key, required this.unit});
@@ -37,220 +43,369 @@ class _UnitDetailScreenState extends ConsumerState<UnitDetailScreen> {
       symbol: '\$',
       decimalDigits: 0,
     );
-    return Scaffold(
-      appBar: AppBar(title: Text(widget.unit.number)),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20.0),
+    final isDesktop = ResponsiveLayout.isDesktop(context);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    Widget buildInfoCard() {
+      return Container(
+        padding: const EdgeInsets.all(22),
+        decoration: BoxDecoration(
+          color: theme.cardColor,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isDark ? Colors.white.withValues(alpha: 0.08) : const Color(0xFFE2E8F0),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: isDark ? Colors.black.withValues(alpha: 0.2) : Colors.black.withValues(alpha: 0.04),
+              blurRadius: 14,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Info Card (Valor Arriendo, Inquilino) - Referencia Imagen 3
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
-                borderRadius: BorderRadius.circular(20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Valor Arriendo:',
+                  style: TextStyle(
+                    color: isDark ? Colors.white70 : const Color(0xFF64748B),
+                    fontSize: 14,
+                  ),
+                ),
+                Text(
+                  currencyFormat.format(
+                    contract?.contractValue ?? widget.unit.baseValue,
+                  ),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                    letterSpacing: -0.4,
+                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Vence: ${contract?.startDate.day ?? 5} de cada mes',
+              style: TextStyle(
+                color: isDark ? Colors.white54 : const Color(0xFF94A3B8),
+                fontSize: 12.5,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            ),
+            const SizedBox(height: 12),
+            ref.watch(unitStatusProvider(widget.unit.id)).when(
+                  data: (status) => Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Valor Arriendo:',
-                        style: TextStyle(color: Colors.white70),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Estado:',
+                            style: TextStyle(
+                              color: isDark ? Colors.white70 : const Color(0xFF64748B),
+                              fontSize: 13.5,
+                            ),
+                          ),
+                          StatusBadge(status: status),
+                        ],
                       ),
+                      if (status != 'Disponible') ...[
+                        const SizedBox(height: 10),
+                        ref.watch(unitDebtProvider(widget.unit.id)).when(
+                              data: (debt) => Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'Deuda Total:',
+                                    style: TextStyle(
+                                      color: isDark ? Colors.white70 : const Color(0xFF64748B),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13.5,
+                                    ),
+                                  ),
+                                  Text(
+                                    currencyFormat.format(debt),
+                                    style: TextStyle(
+                                      color: debt > 0.1 ? const Color(0xFFEF4444) : const Color(0xFF10B981),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              loading: () => const SizedBox.shrink(),
+                              error: (_, __) => const SizedBox.shrink(),
+                            ),
+                      ],
+                    ],
+                  ),
+                  loading: () => const SizedBox(
+                    width: 12,
+                    height: 12,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  error: (_, _) => const Text(
+                    'Error al cargar estado',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                ),
+            Divider(
+              height: 28,
+              color: isDark ? Colors.white12 : const Color(0xFFE2E8F0),
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        currencyFormat.format(
-                          contract?.contractValue ?? widget.unit.baseValue,
+                        'Inquilino',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? Colors.white38 : const Color(0xFF94A3B8),
                         ),
-                        style: const TextStyle(
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        contract?.tenantName ?? 'Disponible',
+                        style: TextStyle(
+                          fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          fontSize: 18,
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
                         ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'Vence: ${contract?.startDate.day ?? 5} de cada mes',
-                    style: const TextStyle(color: Colors.white54),
+                ),
+                if (contract != null)
+                  IconButton(
+                    icon: Icon(
+                      Icons.edit_outlined,
+                      size: 20,
+                      color: theme.colorScheme.primary,
+                    ),
+                    onPressed: () => _showEditTenantDialog(context, ref, contract),
+                    tooltip: 'Editar Inquilino',
                   ),
-                  const SizedBox(height: 10),
-                  ref
-                      .watch(unitStatusProvider(widget.unit.id))
-                      .when(
-                        data: (status) => Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+              ],
+            ),
+            if (contract != null) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(
+                    Icons.phone_outlined,
+                    size: 14,
+                    color: isDark ? Colors.white38 : const Color(0xFF94A3B8),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    contract.phone.isNotEmpty ? contract.phone : 'Sin teléfono',
+                    style: TextStyle(
+                      color: isDark ? Colors.white60 : const Color(0xFF64748B),
+                      fontSize: 13,
+                    ),
+                  ),
+                  if (contract.phone.isNotEmpty) ...[
+                    const SizedBox(width: 10),
+                    InkWell(
+                      onTap: () => _launchWhatsApp(contract.phone),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF25D366).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: const Color(0xFF25D366).withValues(alpha: 0.25),
+                          ),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
+                            Icon(
+                              Icons.chat_bubble_outline_rounded,
+                              size: 11,
+                              color: Color(0xFF25D366),
+                            ),
+                            SizedBox(width: 4),
                             Text(
-                              'Estado: $status',
+                              'WhatsApp',
                               style: TextStyle(
-                                color: status == 'Al Día'
-                                    ? Colors.green
-                                    : (status == 'En Mora'
-                                          ? Colors.redAccent
-                                          : Colors.orangeAccent),
+                                color: Color(0xFF25D366),
+                                fontSize: 11,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            if (status != 'Disponible') ...[
-                              const SizedBox(height: 10),
-                              ref
-                                  .watch(unitDebtProvider(widget.unit.id))
-                                  .when(
-                                    data: (debt) => Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        const Text(
-                                          'Deuda Total:',
-                                          style: TextStyle(
-                                            color: Colors.white70,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                        Text(
-                                          currencyFormat.format(debt),
-                                          style: TextStyle(
-                                            color: debt > 0
-                                                ? Colors.redAccent
-                                                : Colors.green,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 16,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    loading: () => const SizedBox.shrink(),
-                                    error: (_, __) => const SizedBox.shrink(),
-                                  ),
-                            ],
                           ],
                         ),
-                        loading: () => const SizedBox(
-                          width: 10,
-                          height: 10,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                        error: (_, _) => const Text(
-                          'Error al cargar estado',
-                          style: TextStyle(color: Colors.red),
-                        ),
                       ),
-                  const Divider(height: 30, color: Colors.white12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Inquilino: ${contract?.tenantName ?? 'Disponible'}',
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                      ),
-                      if (contract != null)
-                        IconButton(
-                          icon: const Icon(
-                            Icons.edit_outlined,
-                            size: 20,
-                            color: Color(0xFF38BDF8),
-                          ),
-                          onPressed: () =>
-                              _showEditTenantDialog(context, ref, contract),
-                          visualDensity: VisualDensity.compact,
-                          tooltip: 'Editar Inquilino',
-                        ),
-                    ],
-                  ),
-                  if (contract != null) ...[
-                    const SizedBox(height: 5),
-                    Row(
-                      children: [
-                        Text(
-                          '📞 Tel: ${contract.phone}',
-                          style: const TextStyle(color: Colors.white54),
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          icon: const Icon(
-                            Icons.chat_bubble_outline_rounded,
-                            size: 18,
-                            color: Color(0xFF25D366),
-                          ),
-                          onPressed: () => _launchWhatsApp(contract.phone),
-                          visualDensity: VisualDensity.compact,
-                          padding: EdgeInsets.zero,
-                          constraints: const BoxConstraints(),
-                          tooltip: 'Enviar WhatsApp',
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: () {
-                        showDialog(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            backgroundColor: const Color(0xFF1E293B),
-                            title: const Text('Finalizar Contrato'),
-                            content: const Text(
-                              '¿Estás seguro de que deseas finalizar el contrato? Se eliminará permanentemente todo el historial de pagos y abonos relacionados.',
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: const Text('Cancelar'),
-                              ),
-                              TextButton(
-                                onPressed: () async {
-                                  await ref
-                                      .read(contractProvider.notifier)
-                                      .terminateContract(
-                                        contract.id,
-                                        widget.unit.id,
-                                        widget.unit.buildingId,
-                                        ref,
-                                      );
-                                  if (!context.mounted) return;
-                                  Navigator.pop(context); // Cerrar diálogo
-                                },
-                                child: const Text(
-                                  'Confirmar',
-                                  style: TextStyle(color: Colors.redAccent),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white10,
-                      ),
-                      child: const Text('Finalizar Contrato'),
-                    ),
-                  ] else ...[
-                    const SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: () => _showAddContractDialog(context, ref),
-                      child: const Text('Asignar Inquilino'),
                     ),
                   ],
                 ],
               ),
-            ),
-            const SizedBox(height: 30),
-            if (contract != null) ...[
-              const Text(
-                'Historial de Pagos',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              const SizedBox(height: 20),
+              if (isDesktop) ...[
+                ElevatedButton.icon(
+                  onPressed: () => _showAddAbonoDialog(context, ref, contract),
+                  icon: const Icon(Icons.add_card_rounded, size: 18),
+                  label: const Text('Registrar Pago / Abono'),
+                ),
+                const SizedBox(height: 10),
+              ],
+              OutlinedButton.icon(
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('¿Finalizar Contrato?'),
+                      content: const Text(
+                        'Esta acción finalizará el contrato del inquilino y liberará la unidad para un nuevo arrendamiento.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Cancelar'),
+                        ),
+                        ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFEF4444),
+                          ),
+                          onPressed: () async {
+                            await ref.read(contractProvider.notifier).terminateContract(
+                                  contract.id,
+                                  widget.unit.id,
+                                  widget.unit.buildingId,
+                                  ref,
+                                );
+                            if (!context.mounted) return;
+                            Navigator.pop(context);
+                          },
+                          child: const Text('Finalizar'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 46),
+                  side: const BorderSide(color: Color(0xFFEF4444), width: 1),
+                  foregroundColor: const Color(0xFFEF4444),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                icon: const Icon(Icons.exit_to_app_rounded, size: 18),
+                label: const Text('Finalizar Contrato'),
               ),
-              _PaymentHistoryList(contract: contract, unit: widget.unit),
+            ] else ...[
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: () => _showAddContractDialog(context, ref),
+                icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+                label: const Text('Asignar Inquilino'),
+              ),
             ],
           ],
         ),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.unit.number),
+        actions: const [
+          ConnectionStatusBadge(),
+          SizedBox(width: 12),
+        ],
       ),
-      floatingActionButton: contract != null
+      body: isDesktop
+          ? Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 28),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 360,
+                    child: buildInfoCard(),
+                  ),
+                  const SizedBox(width: 28),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Historial de Cobros y Pagos',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: -0.4,
+                                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                ),
+                              ),
+                              if (contract != null)
+                                ElevatedButton.icon(
+                                  onPressed: () => _showAddAbonoDialog(context, ref, contract),
+                                  icon: const Icon(Icons.add_rounded, size: 18),
+                                  label: const Text('Nuevo Abono'),
+                                  style: ElevatedButton.styleFrom(
+                                    minimumSize: const Size(150, 40),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 18),
+                          if (contract != null)
+                            _PaymentHistoryList(contract: contract, unit: widget.unit)
+                          else
+                            const EmptyStateView(
+                              icon: Icons.history_rounded,
+                              title: 'Sin pagos registrados',
+                              description:
+                                  'Asigna un inquilino a este apartamento para comenzar a liquidar los cobros mensuales.',
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : SingleChildScrollView(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  buildInfoCard(),
+                  const SizedBox(height: 30),
+                  if (contract != null) ...[
+                    Text(
+                      'Historial de Pagos',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    _PaymentHistoryList(contract: contract, unit: widget.unit),
+                  ],
+                  const SizedBox(height: 100),
+                ],
+              ),
+            ),
+      floatingActionButton: (!isDesktop && contract != null)
           ? FloatingActionButton.extended(
               onPressed: () => _showAddAbonoDialog(context, ref, contract),
               label: const Text('Registrar Pago'),
@@ -292,14 +447,10 @@ class _UnitDetailScreenState extends ConsumerState<UnitDetailScreen> {
     );
     DateTime selectedDate = DateTime.now();
 
-    showModalBottomSheet(
+    showAdaptiveModal(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: const Color(0xFF1E293B),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
+      title: 'Nuevo Contrato de Arriendo',
+      builder: (ctx) {
         return StatefulBuilder(
           builder: (context, setModalState) {
             return _ContractDialogContent(
@@ -322,14 +473,10 @@ class _UnitDetailScreenState extends ConsumerState<UnitDetailScreen> {
     WidgetRef ref,
     Contract contract,
   ) {
-    showModalBottomSheet(
+    showAdaptiveModal(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: const Color(0xFF1E293B),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) =>
+      title: 'Editar Inquilino',
+      builder: (ctx) =>
           _EditTenantDialogContent(contract: contract, ref: ref),
     );
   }
@@ -339,14 +486,11 @@ class _UnitDetailScreenState extends ConsumerState<UnitDetailScreen> {
     WidgetRef ref,
     Contract contract,
   ) {
-    showModalBottomSheet(
+    showAdaptiveModal(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: const Color(0xFF1E293B),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) =>
+      title: 'Registrar Abono / Pago',
+      maxWidth: 580,
+      builder: (ctx) =>
           _AbonoDialogContent(contract: contract, unit: widget.unit, ref: ref),
     );
   }
@@ -380,152 +524,145 @@ class _ContractDialogContentState extends State<_ContractDialogContent> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-        left: 20,
-        right: 20,
-        top: 20,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Nuevo Contrato',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: widget.nameController,
+          decoration: const InputDecoration(
+            labelText: 'Nombre Completo del Inquilino',
+            hintText: 'Ej: CARLOS GÓMEZ',
+            prefixIcon: Icon(Icons.person_outline_rounded, size: 20),
           ),
-          const SizedBox(height: 20),
-          TextField(
-            controller: widget.nameController,
-            decoration: const InputDecoration(labelText: 'Nombre Inquilino'),
-            textCapitalization: TextCapitalization.characters,
-            inputFormatters: [UpperCaseTextFormatter()],
-            enabled: !_isLoading,
+          textCapitalization: TextCapitalization.characters,
+          inputFormatters: [UpperCaseTextFormatter()],
+          enabled: !_isLoading,
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: widget.phoneController,
+          decoration: const InputDecoration(
+            labelText: 'Teléfono o Celular',
+            hintText: 'Ej: 300 123 4567',
+            prefixIcon: Icon(Icons.phone_outlined, size: 20),
           ),
-          TextField(
-            controller: widget.phoneController,
-            decoration: const InputDecoration(labelText: 'Teléfono'),
-            keyboardType: TextInputType.phone,
-            enabled: !_isLoading,
+          keyboardType: TextInputType.phone,
+          enabled: !_isLoading,
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: widget.valueController,
+          decoration: const InputDecoration(
+            labelText: 'Canon Mensual Acordado',
+            hintText: '250.000',
+            prefixIcon: Icon(Icons.payments_outlined, size: 20),
+            prefixText: '\$ ',
           ),
-          TextField(
-            controller: widget.valueController,
-            decoration: const InputDecoration(labelText: 'Valor Mensual'),
-            keyboardType: TextInputType.number,
-            inputFormatters: [CurrencyInputFormatter()],
-            enabled: !_isLoading,
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            'Fecha de Inicio:',
-            style: TextStyle(color: Colors.white70),
-          ),
-          const SizedBox(height: 10),
-          InkWell(
-            onTap: _isLoading
-                ? null
-                : () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: widget.selectedDate,
-                      firstDate: DateTime(2000),
-                      lastDate: DateTime(2100),
-                    );
-                    if (picked != null) {
-                      widget.onDateChanged(picked);
-                    }
-                  },
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.white24),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    DateFormat('dd / MM / yyyy').format(widget.selectedDate),
-                  ),
-                  const Icon(Icons.calendar_today, size: 18),
-                ],
+          keyboardType: TextInputType.number,
+          inputFormatters: [CurrencyInputFormatter()],
+          enabled: !_isLoading,
+        ),
+        const SizedBox(height: 16),
+        InkWell(
+          onTap: _isLoading
+              ? null
+              : () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: widget.selectedDate,
+                    firstDate: DateTime(2000),
+                    lastDate: DateTime(2100),
+                  );
+                  if (picked != null) {
+                    widget.onDateChanged(picked);
+                  }
+                },
+          borderRadius: BorderRadius.circular(12),
+          child: InputDecorator(
+            decoration: const InputDecoration(
+              labelText: 'Fecha de Inicio del Contrato',
+              prefixIcon: Icon(Icons.calendar_month_outlined, size: 20),
+              suffixIcon: Icon(Icons.arrow_drop_down_rounded, size: 24),
+            ),
+            child: Text(
+              DateFormat('dd / MM / yyyy').format(widget.selectedDate),
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
-          const SizedBox(height: 30),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _isLoading
-                  ? null
-                  : () async {
-                      if (widget.nameController.text.isNotEmpty &&
-                          widget.valueController.text.isNotEmpty) {
-                        setState(() => _isLoading = true);
-                        try {
-                          final contractValue =
-                              double.tryParse(
-                                widget.valueController.text.replaceAll('.', ''),
-                              ) ??
-                              widget.unit.baseValue;
+        ),
+        const SizedBox(height: 24),
+        ElevatedButton.icon(
+          onPressed: _isLoading
+              ? null
+              : () async {
+                  if (widget.nameController.text.isNotEmpty &&
+                      widget.valueController.text.isNotEmpty) {
+                    setState(() => _isLoading = true);
+                    try {
+                      final contractValue =
+                          double.tryParse(
+                            widget.valueController.text.replaceAll('.', ''),
+                          ) ??
+                          widget.unit.baseValue;
 
-                          final c = Contract(
-                            unitId: widget.unit.id,
-                            tenantName: widget.nameController.text.trim(),
-                            phone: widget.phoneController.text.trim(),
-                            startDate: widget.selectedDate,
-                            contractValue: contractValue,
+                      final c = Contract(
+                        unitId: widget.unit.id,
+                        tenantName: widget.nameController.text.trim(),
+                        phone: widget.phoneController.text.trim(),
+                        startDate: widget.selectedDate,
+                        contractValue: contractValue,
+                      );
+                      await widget.ref
+                          .read(contractProvider.notifier)
+                          .addContract(
+                            c,
+                            widget.unit.buildingId,
+                            widget.ref,
                           );
-                          await widget.ref
-                              .read(contractProvider.notifier)
-                              .addContract(
-                                c,
-                                widget.unit.buildingId,
-                                widget.ref,
-                              );
-                          if (context.mounted) {
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: const Text(
-                                  'Contrato creado con éxito',
-                                ),
-                                backgroundColor: Colors.green.shade700,
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                margin: const EdgeInsets.symmetric(
-                                  horizontal: 40,
-                                  vertical: 20,
-                                ),
-                                duration: const Duration(seconds: 2),
-                              ),
-                            );
-                          }
-                        } finally {
-                          if (context.mounted) {
-                            setState(() => _isLoading = false);
-                          }
-                        }
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text(
+                              'Contrato creado con éxito',
+                            ),
+                            backgroundColor: Colors.green.shade700,
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 40,
+                              vertical: 20,
+                            ),
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
                       }
-                    },
-              child: _isLoading
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Text('Comenzar Contrato'),
-            ),
-          ),
-          const SizedBox(height: 20),
-        ],
-      ),
+                    } finally {
+                      if (context.mounted) {
+                        setState(() => _isLoading = false);
+                      }
+                    }
+                  }
+                },
+          icon: _isLoading
+              ? const SizedBox(
+                  height: 18,
+                  width: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Icon(Icons.assignment_turned_in_outlined, size: 20),
+          label: Text(_isLoading ? 'Creando Contrato...' : 'Comenzar Contrato'),
+        ),
+      ],
     );
   }
 }
@@ -584,111 +721,135 @@ class _AbonoDialogContentState extends State<_AbonoDialogContent> {
     final isOverLimit = inputAmount > currentDebt;
     final isInvalid = inputAmount <= 0;
 
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-        left: 20,
-        right: 20,
-        top: 20,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Registrar Abono',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 10),
-          debtAsync.when(
-            data: (debt) => Text(
-              'Deuda Pendiente: ${currencyFormat.format(debt)}',
-              style: TextStyle(
-                color: debt > 0 ? Colors.redAccent : Colors.green,
-                fontWeight: FontWeight.bold,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: debtAsync.maybeWhen(
+              data: (debt) => debt > 0
+                  ? const Color(0xFFFEF2F2)
+                  : const Color(0xFFF0FDF4),
+              orElse: () => const Color(0xFFF8FAFC),
+            ),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: debtAsync.maybeWhen(
+                data: (debt) => debt > 0
+                    ? const Color(0xFFFECACA)
+                    : const Color(0xFFBBF7D0),
+                orElse: () => const Color(0xFFE2E8F0),
               ),
             ),
-            loading: () => const SizedBox.shrink(),
-            error: (_, __) => const SizedBox.shrink(),
           ),
-          const SizedBox(height: 20),
-          TextField(
-            controller: _amountController,
-            decoration: InputDecoration(
-              labelText: 'Monto Pagado',
-              prefixText: '\$',
-              errorText: isOverLimit
-                  ? 'No puedes superar la deuda total'
-                  : null,
-            ),
-            keyboardType: TextInputType.number,
-            inputFormatters: [CurrencyInputFormatter()],
-            enabled: !_isLoading,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Deuda Pendiente:',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF334155),
+                ),
+              ),
+              debtAsync.when(
+                data: (debt) => Text(
+                  currencyFormat.format(debt),
+                  style: TextStyle(
+                    color: debt > 0
+                        ? const Color(0xFFDC2626)
+                        : const Color(0xFF16A34A),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                loading: () => const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                error: (_, __) => const Text('Error'),
+              ),
+            ],
           ),
-          const SizedBox(height: 15),
-          const SizedBox(height: 30),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: (_isLoading || isOverLimit || isInvalid)
-                  ? null
-                  : () async {
-                      if (inputAmount > 0) {
-                        setState(() => _isLoading = true);
-                        try {
-                          await widget.ref
-                              .read(
-                                paymentProvider(widget.contract.id).notifier,
-                              )
-                              .applyCascadingPayment(
-                                totalAmount: inputAmount,
-                                method: 'Efectivo',
-                                buildingId: widget.unit.buildingId,
-                                unitId: widget.unit.id,
-                                ref: widget.ref,
-                              );
-                          if (context.mounted) {
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: const Text(
-                                  'Pago registrado correctamente',
-                                ),
-                                backgroundColor: Colors.green.shade700,
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                margin: const EdgeInsets.symmetric(
-                                  horizontal: 40,
-                                  vertical: 20,
-                                ),
-                                duration: const Duration(seconds: 2),
-                              ),
-                            );
-                          }
-                        } finally {
-                          if (context.mounted) {
-                            setState(() => _isLoading = false);
-                          }
-                        }
+        ),
+        const SizedBox(height: 18),
+        TextField(
+          controller: _amountController,
+          decoration: InputDecoration(
+            labelText: 'Monto a Abonar',
+            hintText: '0',
+            prefixIcon: const Icon(Icons.attach_money_rounded, size: 20),
+            errorText: isOverLimit
+                ? 'No puedes superar la deuda total'
+                : null,
+          ),
+          keyboardType: TextInputType.number,
+          inputFormatters: [CurrencyInputFormatter()],
+          enabled: !_isLoading,
+        ),
+        const SizedBox(height: 24),
+        ElevatedButton.icon(
+          onPressed: (_isLoading || isOverLimit || isInvalid)
+              ? null
+              : () async {
+                  if (inputAmount > 0) {
+                    setState(() => _isLoading = true);
+                    try {
+                      await widget.ref
+                          .read(
+                            paymentProvider(widget.contract.id).notifier,
+                          )
+                          .applyCascadingPayment(
+                            totalAmount: inputAmount,
+                            method: 'Efectivo',
+                            buildingId: widget.unit.buildingId,
+                            unitId: widget.unit.id,
+                            ref: widget.ref,
+                          );
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text(
+                              'Pago registrado correctamente',
+                            ),
+                            backgroundColor: Colors.green.shade700,
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 40,
+                              vertical: 20,
+                            ),
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
                       }
-                    },
-              child: _isLoading
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Text('Guardar Pago'),
-            ),
-          ),
-          const SizedBox(height: 20),
-        ],
-      ),
+                    } finally {
+                      if (context.mounted) {
+                        setState(() => _isLoading = false);
+                      }
+                    }
+                  }
+                },
+          icon: _isLoading
+              ? const SizedBox(
+                  height: 18,
+                  width: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Icon(Icons.check_circle_outline, size: 20),
+          label: Text(_isLoading ? 'Registrando...' : 'Confirmar Abono'),
+        ),
+      ],
     );
   }
 }
@@ -726,8 +887,11 @@ class _PaymentHistoryList extends ConsumerWidget {
             return Container(
               margin: const EdgeInsets.only(bottom: 12),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E293B),
+                color: Theme.of(context).cardColor,
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Theme.of(context).dividerColor.withValues(alpha: 0.08),
+                ),
               ),
               child: Theme(
                 data: Theme.of(
@@ -816,9 +980,7 @@ class _PaymentHistoryList extends ConsumerWidget {
                                         showDialog(
                                           context: context,
                                           builder: (context) => AlertDialog(
-                                            backgroundColor: const Color(
-                                              0xFF1E293B,
-                                            ),
+                                            backgroundColor: Theme.of(context).cardColor,
                                             title: const Text(
                                               '¿Deshacer Pago?',
                                               style: TextStyle(
@@ -956,38 +1118,19 @@ class _StatusBadge extends StatelessWidget {
     final isPastMonth =
         year < now.year || (year == now.year && month < now.month);
 
-    Color color = Colors.orange;
     String label = 'Pendiente';
 
     if (status == 'pagado') {
-      color = Colors.green;
       label = 'Pagado';
     } else if (status == 'parcial') {
-      color = isPastMonth ? Colors.redAccent : Colors.blue;
       label = 'Parcial';
     } else if (status == 'mora' || (isPastMonth && status == 'pendiente')) {
-      color = Colors.redAccent;
       label = status == 'mora' ? 'Mora' : 'Pendiente';
     } else if (status == 'pendiente') {
-      color = Colors.orange;
       label = 'Pendiente';
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 13,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
+    return StatusBadge(status: label);
   }
 }
 
@@ -1023,96 +1166,89 @@ class _EditTenantDialogContentState extends State<_EditTenantDialogContent> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-        left: 20,
-        right: 20,
-        top: 20,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Editar Datos del Inquilino',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: _nameController,
+          decoration: const InputDecoration(
+            labelText: 'Nombre Completo del Inquilino',
+            hintText: 'Ej: CARLOS GÓMEZ',
+            prefixIcon: Icon(Icons.person_outline_rounded, size: 20),
           ),
-          const SizedBox(height: 20),
-          TextField(
-            controller: _nameController,
-            decoration: const InputDecoration(labelText: 'Nombre Completo'),
-            textCapitalization: TextCapitalization.characters,
-            inputFormatters: [UpperCaseTextFormatter()],
-            enabled: !_isLoading,
+          textCapitalization: TextCapitalization.characters,
+          inputFormatters: [UpperCaseTextFormatter()],
+          enabled: !_isLoading,
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _phoneController,
+          decoration: const InputDecoration(
+            labelText: 'Teléfono o Celular',
+            hintText: 'Ej: 300 123 4567',
+            prefixIcon: Icon(Icons.phone_outlined, size: 20),
           ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _phoneController,
-            decoration: const InputDecoration(labelText: 'Teléfono'),
-            keyboardType: TextInputType.phone,
-            enabled: !_isLoading,
-          ),
-          const SizedBox(height: 30),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _isLoading
-                  ? null
-                  : () async {
-                      if (_nameController.text.isNotEmpty) {
-                        setState(() => _isLoading = true);
-                        try {
-                          final updatedContract = widget.contract.copyWith(
-                            tenantName: _nameController.text.trim(),
-                            phone: _phoneController.text.trim(),
-                          );
-                          await widget.ref
-                              .read(contractProvider.notifier)
-                              .updateContract(updatedContract, widget.ref);
+          keyboardType: TextInputType.phone,
+          enabled: !_isLoading,
+        ),
+        const SizedBox(height: 24),
+        ElevatedButton.icon(
+          onPressed: _isLoading
+              ? null
+              : () async {
+                  if (_nameController.text.isNotEmpty) {
+                    setState(() => _isLoading = true);
+                    try {
+                      final updatedContract = widget.contract.copyWith(
+                        tenantName: _nameController.text.trim(),
+                        phone: _phoneController.text.trim(),
+                      );
+                      await widget.ref
+                          .read(contractProvider.notifier)
+                          .updateContract(updatedContract, widget.ref);
 
-                          if (context.mounted) {
-                            Navigator.pop(context);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: const Text(
-                                  'Datos actualizados correctamente',
-                                ),
-                                backgroundColor: Colors.green.shade700,
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                margin: const EdgeInsets.symmetric(
-                                  horizontal: 40,
-                                  vertical: 20,
-                                ),
-                                duration: const Duration(seconds: 2),
-                              ),
-                            );
-                          }
-                        } finally {
-                          if (context.mounted) {
-                            setState(() => _isLoading = false);
-                          }
-                        }
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text(
+                              'Datos actualizados correctamente',
+                            ),
+                            backgroundColor: Colors.green.shade700,
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            margin: const EdgeInsets.symmetric(
+                              horizontal: 40,
+                              vertical: 20,
+                            ),
+                            duration: const Duration(seconds: 2),
+                          ),
+                        );
                       }
-                    },
-              child: _isLoading
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Text('Actualizar Datos'),
-            ),
-          ),
-          const SizedBox(height: 20),
-        ],
-      ),
+                    } finally {
+                      if (context.mounted) {
+                        setState(() => _isLoading = false);
+                      }
+                    }
+                  }
+                },
+          icon: _isLoading
+              ? const SizedBox(
+                  height: 18,
+                  width: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Colors.white,
+                  ),
+                )
+              : const Icon(Icons.save_outlined, size: 20),
+          label: Text(_isLoading ? 'Guardando...' : 'Guardar Cambios'),
+        ),
+      ],
     );
   }
 }
+

@@ -2,20 +2,21 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/contract.dart';
 import '../models/monthly_payment.dart';
-import '../services/supabase_service.dart';
+import '../repositories/app_repository.dart';
+import 'repository_provider.dart';
 import 'building_stats_provider.dart';
 import 'dashboard_provider.dart';
 import 'tenant_provider.dart';
 import 'payment_provider.dart';
 
 class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
-  final SupabaseService _supabaseService;
+  final AppRepository _repository;
   final Set<String> _processingContracts = {};
 
-  ContractNotifier(this._supabaseService) : super({});
+  ContractNotifier(this._repository) : super({});
 
-  Future<void> loadActiveContractForUnit(String unitId) async {
-    final contract = await _supabaseService.getActiveContract(unitId);
+  Future<void> loadActiveContractForUnit(String unitId, {bool forceRemote = false}) async {
+    final contract = await _repository.getActiveContract(unitId, forceRemote: forceRemote);
     if (!mounted) return;
     state = {...state, unitId: contract};
 
@@ -25,9 +26,7 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
   }
 
   Future<void> loadActiveContractsForBuilding(String buildingId) async {
-    final contracts = await _supabaseService.getActiveContractsForBuilding(
-      buildingId,
-    );
+    final contracts = await _repository.getActiveContractsForBuilding(buildingId);
     if (!mounted) return;
 
     final Map<String, Contract?> newEntries = {};
@@ -37,7 +36,6 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
 
     state = {...state, ...newEntries};
 
-    // Opcional: Generar pagos para todos (aunque es mejor que sea bajo demanda)
     for (var contract in contracts) {
       _checkAndGenerateMonthlyPayment(contract);
     }
@@ -48,7 +46,7 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
     String buildingId,
     WidgetRef ref,
   ) async {
-    await _supabaseService.insertContract(contract);
+    await _repository.addContract(contract);
     await loadActiveContractForUnit(contract.unitId);
     ref.invalidate(dashboardStatsProvider);
     ref.invalidate(activeTenantsProvider);
@@ -65,7 +63,7 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
     String buildingId,
     WidgetRef ref,
   ) async {
-    await _supabaseService.terminateContract(contractId);
+    await _repository.terminateContract(contractId);
     if (!mounted) return;
     state = {...state, unitId: null};
 
@@ -78,7 +76,7 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
   }
 
   Future<void> updateContract(Contract contract, WidgetRef ref) async {
-    await _supabaseService.updateContract(contract);
+    await _repository.updateContract(contract);
     if (!mounted) return;
     state = {...state, contract.unitId: contract};
     ref.invalidate(activeTenantsProvider);
@@ -91,7 +89,7 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
     try {
       final now = DateTime.now();
 
-      final existingPayments = await _supabaseService.getPayments(contract.id);
+      final existingPayments = await _repository.getPayments(contract.id);
       final Set<String> existingKeys = existingPayments
           .map((p) => '${p.month}-${p.year}')
           .toSet();
@@ -107,7 +105,6 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
         final key = '${checkDate.month}-${checkDate.year}';
 
         if (!existingKeys.contains(key)) {
-          // Determinar el día de generación para este mes específico
           int generationDay = contract.startDate.day;
           int lastDayOfCheckMonth = DateTime(
             checkDate.year,
@@ -118,19 +115,17 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
             generationDay = lastDayOfCheckMonth;
           }
 
-          // Si es el mes actual, verificar si ya llegó el día de generación
           if (checkDate.year == now.year && checkDate.month == now.month) {
             if (now.day < generationDay) {
-              break; // Aún no es el día de generar el pago de este mes
+              break;
             }
           }
 
-          // Generar para este mes
           final dueDateDay =
               contract.startDate.day >
-                  DateTime(checkDate.year, checkDate.month + 2, 0).day
-              ? DateTime(checkDate.year, checkDate.month + 2, 0).day
-              : contract.startDate.day;
+                      DateTime(checkDate.year, checkDate.month + 2, 0).day
+                  ? DateTime(checkDate.year, checkDate.month + 2, 0).day
+                  : contract.startDate.day;
 
           final dueDate = DateTime(
             checkDate.year,
@@ -153,7 +148,7 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
       }
       if (paymentsToInsert.isNotEmpty) {
         debugPrint('Insertando ${paymentsToInsert.length} pagos mensuales...');
-        await _supabaseService.insertMonthlyPaymentsBatch(paymentsToInsert);
+        await _repository.insertMonthlyPaymentsBatch(paymentsToInsert);
       }
     } finally {
       _processingContracts.remove(contract.id);
@@ -163,5 +158,6 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
 
 final contractProvider =
     StateNotifierProvider<ContractNotifier, Map<String, Contract?>>((ref) {
-      return ContractNotifier(SupabaseService());
+      final repository = ref.watch(appRepositoryProvider);
+      return ContractNotifier(repository);
     });

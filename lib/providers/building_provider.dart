@@ -1,39 +1,46 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/building.dart';
-import '../services/supabase_service.dart';
+import '../repositories/app_repository.dart';
+import 'repository_provider.dart';
 import 'dashboard_provider.dart';
 
 class BuildingNotifier extends AsyncNotifier<List<Building>> {
-  SupabaseService get _supabaseService => SupabaseService();
+  AppRepository get _repository => ref.read(appRepositoryProvider);
 
   @override
   Future<List<Building>> build() async {
-    return _supabaseService.getBuildings();
+    return _repository.getBuildings();
   }
 
   Future<void> addBuilding(Building building) async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
-      await _supabaseService.insertBuilding(building);
-      return _supabaseService.getBuildings();
+      await _repository.addBuilding(building);
+      return _repository.getBuildings();
     });
   }
 
   Future<void> updateBuilding(Building building) async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
-      await _supabaseService.updateBuilding(building);
-      return _supabaseService.getBuildings();
+      await _repository.updateBuilding(building);
+      return _repository.getBuildings();
     });
   }
 
-  Future<void> deleteBuilding(String buildingId, WidgetRef ref) async {
+  Future<void> deleteBuilding(String buildingId, WidgetRef? refWidget) async {
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(() async {
-      await _supabaseService.deleteBuilding(buildingId);
-      // Invalidar estadísticas globales ya que el inmueble desaparece
+      await _repository.deleteBuilding(buildingId);
       ref.invalidate(dashboardStatsProvider);
-      return _supabaseService.getBuildings();
+      return _repository.getBuildings();
+    });
+  }
+
+  Future<void> refresh() async {
+    state = const AsyncValue.loading();
+    state = await AsyncValue.guard(() async {
+      return _repository.getBuildings(forceRemote: true);
     });
   }
 }
