@@ -3,14 +3,12 @@
   "configurations": [
     {
       "name": "arriendos-web-local",
-      "runtimeExecutable": "flutter",
+      "runtimeExecutable": "npx",
       "runtimeArgs": [
-        "run",
-        "-d",
-        "web-server",
-        "--web-port",
-        "8765",
-        "--dart-define=ENV=local"
+        "serve",
+        "build/web",
+        "-l",
+        "8765"
       ],
       "port": 8765
     }
