@@ -429,6 +429,20 @@ class AppRepository {
     return debt;
   }
 
+  /// Ocupación de un edificio (total de unidades y cuántas tienen contrato
+  /// activo). Igual que `getBuildingDebt`/`getUnitStatus`, lee solo la caché
+  /// local: como esto se recalcula automáticamente después de cada
+  /// sincronización (Hive ya está al día en ese momento), no hay necesidad
+  /// de ir a buscar cada unidad y cada contrato a la red uno por uno.
+  Future<Map<String, int>> getOccupancy(String buildingId) async {
+    final units = LocalStorageService.getUnitsForBuilding(buildingId);
+    int rented = 0;
+    for (var u in units) {
+      if (LocalStorageService.getActiveContractForUnit(u.id) != null) rented++;
+    }
+    return {'total': units.length, 'rented': rented};
+  }
+
   Future<double> getUnitDebt(String unitId) async {
     final contract = LocalStorageService.getActiveContractForUnit(unitId);
     if (contract == null) return 0.0;

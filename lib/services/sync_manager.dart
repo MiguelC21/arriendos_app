@@ -3,6 +3,10 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../models/abono.dart';
+import '../models/contract.dart';
+import '../models/monthly_payment.dart';
+import '../models/unit.dart';
 import 'local_storage_service.dart';
 import 'supabase_service.dart';
 import '../providers/building_provider.dart';
@@ -276,24 +280,52 @@ class SyncNotifier extends StateNotifier<SyncState> {
   /// local con esa verdad remota: guarda lo que llega y elimina en cascada
   /// lo que ya no exista remotamente (p. ej. algo borrado desde otro
   /// dispositivo), para que ningún cliente se quede con datos fantasma.
+  ///
+  /// Trae todo con 5 consultas fijas (una por tabla) en vez de una consulta
+  /// por cada edificio/contrato/pago: con pocos edificios eso ya eran 20-30
+  /// viajes de red secuenciales, y cada uno pesa por su latencia propia (más
+  /// notorio en producción) sin importar cuántos datos traiga. Las 5 salen
+  /// en paralelo y la reconciliación agrupa todo en memoria localmente.
   Future<void> _syncDown() async {
     try {
-      final buildings = await _supabaseService.getBuildings();
+      final buildingsFuture = _supabaseService.getBuildings();
+      final unitsFuture = _supabaseService.getAllUnits();
+      final contractsFuture = _supabaseService.getAllActiveContracts();
+      final paymentsFuture = _supabaseService.getAllPayments();
+      final abonosFuture = _supabaseService.getAllAbonos();
+
+      final buildings = await buildingsFuture;
+      final allUnits = await unitsFuture;
+      final allContracts = await contractsFuture;
+      final allPayments = await paymentsFuture;
+      final allAbonos = await abonosFuture;
+
       await LocalStorageService.reconcileBuildings(buildings);
 
+      final unitsByBuilding = _groupBy(allUnits, (Unit u) => u.buildingId);
+      final buildingIdByUnitId = {for (var u in allUnits) u.id: u.buildingId};
+      final contractsByBuilding = <String, List<Contract>>{};
+      for (var c in allContracts) {
+        final buildingId = buildingIdByUnitId[c.unitId];
+        if (buildingId == null) continue;
+        (contractsByBuilding[buildingId] ??= []).add(c);
+      }
+      final paymentsByContract = _groupBy(allPayments, (MonthlyPayment p) => p.contractId);
+      final abonosByPayment = _groupBy(allAbonos, (Abono a) => a.paymentId);
+
       for (var b in buildings) {
-        final units = await _supabaseService.getUnits(b.id);
+        final units = unitsByBuilding[b.id] ?? const [];
         await LocalStorageService.reconcileUnitsForBuilding(b.id, units);
 
-        final contracts = await _supabaseService.getActiveContractsForBuilding(b.id);
+        final contracts = contractsByBuilding[b.id] ?? const [];
         await LocalStorageService.reconcileContractsForBuilding(b.id, contracts);
 
         for (var c in contracts) {
-          final payments = await _supabaseService.getPayments(c.id);
+          final payments = paymentsByContract[c.id] ?? const [];
           await LocalStorageService.reconcilePaymentsForContract(c.id, payments);
 
           for (var p in payments) {
-            final abonos = await _supabaseService.getAbonosForPayment(p.id);
+            final abonos = abonosByPayment[p.id] ?? const [];
             await LocalStorageService.reconcileAbonosForPayment(p.id, abonos);
           }
         }
@@ -302,6 +334,14 @@ class SyncNotifier extends StateNotifier<SyncState> {
     } catch (e) {
       debugPrint('Aviso: no se pudo completar syncDown (posiblemente offline): $e');
     }
+  }
+
+  Map<String, List<T>> _groupBy<T>(List<T> items, String Function(T) keyOf) {
+    final map = <String, List<T>>{};
+    for (var item in items) {
+      (map[keyOf(item)] ??= []).add(item);
+    }
+    return map;
   }
 
   void notifyLocalMutation() {

@@ -59,6 +59,16 @@ class SupabaseService {
     return (response as List).map((m) => Unit.fromMap(m)).toList();
   }
 
+  /// Trae TODAS las unidades en una sola consulta (usado por la sincronización
+  /// completa, para no hacer una consulta por cada edificio).
+  Future<List<Unit>> getAllUnits() async {
+    final response = await _client
+        .from('units')
+        .select()
+        .order('number', ascending: true);
+    return (response as List).map((m) => Unit.fromMap(m)).toList();
+  }
+
   Future<void> insertUnit(Unit unit) async {
     await _client.from('units').insert(unit.toMap());
   }
@@ -105,6 +115,17 @@ class SupabaseService {
     return (response as List).map((m) => Contract.fromMap(m)).toList();
   }
 
+  /// Trae TODOS los contratos activos en una sola consulta (usado por la
+  /// sincronización completa, para no hacer una consulta por cada edificio).
+  Future<List<Contract>> getAllActiveContracts() async {
+    final response = await _client
+        .from('contracts')
+        .select()
+        .eq('active', true);
+
+    return (response as List).map((m) => Contract.fromMap(m)).toList();
+  }
+
   Future<void> insertContract(Contract contract) async {
     await _client.from('contracts').insert(contract.toMap());
   }
@@ -123,6 +144,17 @@ class SupabaseService {
         .from('monthly_payments')
         .select()
         .eq('contract_id', contractId)
+        .order('year', ascending: false)
+        .order('month', ascending: false);
+    return (response as List).map((m) => MonthlyPayment.fromMap(m)).toList();
+  }
+
+  /// Trae TODOS los pagos mensuales en una sola consulta (usado por la
+  /// sincronización completa, para no hacer una consulta por cada contrato).
+  Future<List<MonthlyPayment>> getAllPayments() async {
+    final response = await _client
+        .from('monthly_payments')
+        .select()
         .order('year', ascending: false)
         .order('month', ascending: false);
     return (response as List).map((m) => MonthlyPayment.fromMap(m)).toList();
@@ -193,6 +225,16 @@ class SupabaseService {
         .from('abonos')
         .select()
         .eq('payment_id', paymentId)
+        .order('date', ascending: false);
+    return (response as List).map((m) => Abono.fromMap(m)).toList();
+  }
+
+  /// Trae TODOS los abonos en una sola consulta (usado por la sincronización
+  /// completa, para no hacer una consulta por cada pago mensual).
+  Future<List<Abono>> getAllAbonos() async {
+    final response = await _client
+        .from('abonos')
+        .select()
         .order('date', ascending: false);
     return (response as List).map((m) => Abono.fromMap(m)).toList();
   }

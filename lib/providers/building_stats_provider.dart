@@ -20,19 +20,7 @@ final unitStatusProvider = FutureProvider.family<String, String>((
 final buildingOccupancyProvider =
     FutureProvider.family<Map<String, int>, String>((ref, buildingId) async {
       final repository = ref.watch(appRepositoryProvider);
-
-      // Obtenemos todas las unidades de este edificio
-      final units = await repository.getUnits(buildingId);
-      final total = units.length;
-
-      // Contamos cuántas tienen contrato activo
-      int rented = 0;
-      for (var unit in units) {
-        final contract = await repository.getActiveContract(unit.id);
-        if (contract != null) rented++;
-      }
-
-      return {'total': total, 'rented': rented};
+      return await repository.getOccupancy(buildingId);
     });
 
 final unitDebtProvider = FutureProvider.family<double, String>((
