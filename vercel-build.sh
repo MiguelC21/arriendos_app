@@ -1,4 +1,5 @@
 #!/bin/bash
+# Build de Flutter web para Vercel
 set -e
 
 echo "Clonando Flutter SDK (canal stable)..."
