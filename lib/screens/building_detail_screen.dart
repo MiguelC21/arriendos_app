@@ -180,10 +180,9 @@ class _BuildingDetailScreenState extends ConsumerState<BuildingDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final title = Text(
                         'Apartamentos y Unidades ($totalUnits)',
                         style: TextStyle(
                           fontSize: 20,
@@ -191,8 +190,8 @@ class _BuildingDetailScreenState extends ConsumerState<BuildingDetailScreen> {
                           letterSpacing: -0.4,
                           color: isDark ? Colors.white : const Color(0xFF0F172A),
                         ),
-                      ),
-                      SizedBox(
+                      );
+                      final search = SizedBox(
                         width: 240,
                         height: 42,
                         child: TextField(
@@ -204,8 +203,25 @@ class _BuildingDetailScreenState extends ConsumerState<BuildingDetailScreen> {
                             fillColor: isDark ? const Color(0xFF181A1F) : Colors.white,
                           ),
                         ),
-                      ),
-                    ],
+                      );
+
+                      // En desktop angosto, título y buscador no caben en una
+                      // sola fila: se apilan en vez de aplastar el texto.
+                      if (constraints.maxWidth >= 480) {
+                        return Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [title, search],
+                        );
+                      }
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          title,
+                          const SizedBox(height: 12),
+                          search,
+                        ],
+                      );
+                    },
                   ),
                   const SizedBox(height: 18),
                   if (units.isEmpty)
@@ -608,6 +624,19 @@ class _UnitCard extends ConsumerWidget {
                   else
                     const StatusBadge(status: 'Disponible'),
                   IconButton(
+                    tooltip: 'Editar Apartamento',
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: () => _showEditUnitDialog(context, ref),
+                    icon: Icon(
+                      Icons.edit_outlined,
+                      size: 18,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  IconButton(
                     tooltip: 'Eliminar Apartamento',
                     visualDensity: VisualDensity.compact,
                     padding: EdgeInsets.zero,
@@ -678,6 +707,69 @@ class _UnitCard extends ConsumerWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _showEditUnitDialog(BuildContext context, WidgetRef ref) {
+    final numberController = TextEditingController(text: unit.number);
+    final currencyFormat = NumberFormat.currency(
+      locale: 'es_CO',
+      symbol: '',
+      decimalDigits: 0,
+    );
+    final valueController = TextEditingController(
+      text: currencyFormat.format(unit.baseValue).trim(),
+    );
+
+    showAdaptiveModal(
+      context: context,
+      title: 'Editar Apartamento',
+      builder: (ctx) => Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: numberController,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(
+              labelText: 'Número o Nombre',
+              hintText: 'Ej: Apto 101, Local 2',
+              prefixIcon: Icon(Icons.door_front_door_outlined, size: 20),
+            ),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: valueController,
+            keyboardType: TextInputType.number,
+            inputFormatters: [CurrencyInputFormatter()],
+            decoration: const InputDecoration(
+              labelText: 'Valor Base de Arriendo',
+              hintText: '\$ 1.200.000',
+              prefixIcon: Icon(Icons.attach_money_rounded, size: 20),
+            ),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton(
+            onPressed: () {
+              if (numberController.text.trim().isNotEmpty) {
+                final cleanedValue = valueController.text.replaceAll(RegExp(r'[^0-9]'), '');
+                final baseValue = double.tryParse(cleanedValue) ?? 0.0;
+
+                final updatedUnit = Unit(
+                  id: unit.id,
+                  buildingId: unit.buildingId,
+                  number: numberController.text.trim(),
+                  baseValue: baseValue,
+                  createdAt: unit.createdAt,
+                );
+                ref.read(unitProvider.notifier).updateUnit(updatedUnit, ref);
+                Navigator.pop(ctx);
+              }
+            },
+            child: const Text('Guardar Cambios'),
+          ),
+        ],
       ),
     );
   }

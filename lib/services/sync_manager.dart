@@ -8,6 +8,7 @@ import 'supabase_service.dart';
 import '../providers/building_provider.dart';
 import '../providers/building_stats_provider.dart';
 import '../providers/dashboard_provider.dart';
+import '../providers/payment_provider.dart';
 import '../providers/tenant_provider.dart';
 
 enum SyncConnectionState { online, offline, syncing }
@@ -199,6 +200,14 @@ class SyncNotifier extends StateNotifier<SyncState> {
       _ref?.invalidate(buildingDebtProvider);
       _ref?.invalidate(unitStatusProvider);
       _ref?.invalidate(unitDebtProvider);
+      // paymentProvider es un StateNotifierProvider.family: a diferencia de
+      // los FutureProvider de arriba, solo recarga cuando alguien llama a
+      // loadPayments() explícitamente. Sin esta invalidación, una pantalla
+      // de pagos ya abierta se queda mostrando el estado/monto viejo (p. ej.
+      // "Pendiente") aunque los abonos que lo cambian ya hayan llegado por
+      // sync, hasta que el usuario reinicie la app.
+      _ref?.invalidate(paymentProvider);
+      _ref?.invalidate(abonosProvider);
     } catch (e) {
       debugPrint('Error durante syncAll: $e');
       state = state.copyWith(

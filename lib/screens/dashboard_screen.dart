@@ -251,58 +251,85 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           const SizedBox(height: 36),
 
           // 2. ENCABEZADO Y BARRA DE BÚSQUEDA
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final titleBlock = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Directorio de Inmuebles',
+                    style: TextStyle(
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: -0.4,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Gestiona tus propiedades, edificios y apartamentos',
+                    style: TextStyle(
+                      color: isDark ? Colors.white54 : const Color(0xFF64748B),
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              );
+
+              if (!isDesktop) return titleBlock;
+
+              final searchAndButton = Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 260,
+                    height: 44,
+                    child: TextField(
+                      onChanged: (val) => setState(() => _searchQuery = val.trim().toLowerCase()),
+                      decoration: InputDecoration(
+                        hintText: 'Buscar inmueble...',
+                        prefixIcon: const Icon(Icons.search_rounded, size: 18),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                        fillColor: isDark ? const Color(0xFF181A1F) : Colors.white,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton.icon(
+                    onPressed: () => _showAddBuildingDialog(context, ref),
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text('Nuevo Inmueble'),
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(160, 44),
+                    ),
+                  ),
+                ],
+              );
+
+              // En desktop angosto (justo sobre el umbral de 768px) el título
+              // y el buscador+botón no caben en una sola fila: el título
+              // queda con tan poco espacio que el texto se parte letra por
+              // letra. Apilamos verticalmente en vez de forzar la fila.
+              const minWidthForInlineHeader = 620.0;
+              if (constraints.maxWidth >= minWidthForInlineHeader) {
+                return Row(
                   children: [
-                    Text(
-                      'Directorio de Inmuebles',
-                      style: TextStyle(
-                        color: isDark ? Colors.white : const Color(0xFF0F172A),
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: -0.4,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Gestiona tus propiedades, edificios y apartamentos',
-                      style: TextStyle(
-                        color: isDark ? Colors.white54 : const Color(0xFF64748B),
-                        fontSize: 13,
-                      ),
-                    ),
+                    Expanded(child: titleBlock),
+                    searchAndButton,
                   ],
-                ),
-              ),
-              if (isDesktop) ...[
-                // Buscador en Desktop
-                SizedBox(
-                  width: 260,
-                  height: 44,
-                  child: TextField(
-                    onChanged: (val) => setState(() => _searchQuery = val.trim().toLowerCase()),
-                    decoration: InputDecoration(
-                      hintText: 'Buscar inmueble...',
-                      prefixIcon: const Icon(Icons.search_rounded, size: 18),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14),
-                      fillColor: isDark ? const Color(0xFF181A1F) : Colors.white,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                ElevatedButton.icon(
-                  onPressed: () => _showAddBuildingDialog(context, ref),
-                  icon: const Icon(Icons.add_rounded, size: 18),
-                  label: const Text('Nuevo Inmueble'),
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(160, 44),
-                  ),
-                ),
-              ],
-            ],
+                );
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  titleBlock,
+                  const SizedBox(height: 14),
+                  searchAndButton,
+                ],
+              );
+            },
           ),
           if (!isDesktop) ...[
             const SizedBox(height: 14),
