@@ -390,7 +390,7 @@ class LocalStorageService {
   static Future<void> saveAbono(Abono abono) async {
     await _abonosBox.put(abono.id, abono.toMap());
     // Recalcular saldo del pago mensual
-    await _recalculatePaymentStatus(abono.paymentId);
+    await recalculatePaymentStatus(abono.paymentId);
   }
 
   static Future<void> saveAbonosBatch(List<Abono> abonos) async {
@@ -421,12 +421,19 @@ class LocalStorageService {
       final paymentId = map['payment_id'];
       await _abonosBox.delete(id);
       if (paymentId != null) {
-        await _recalculatePaymentStatus(paymentId);
+        await recalculatePaymentStatus(paymentId);
       }
     }
   }
 
-  static Future<void> _recalculatePaymentStatus(String paymentId) async {
+  /// Recalcula paid_value/status de un pago mensual a partir de la suma real
+  /// de sus abonos. paid_value/status en sí no son la fuente de verdad: dos
+  /// dispositivos offline que abonan al mismo mes solo conocen su propio
+  /// abono al momento de guardar, así que su `monthly_payment` subido puede
+  /// quedar con un total incompleto. Por eso esto debe llamarse siempre
+  /// después de reconciliar los abonos de un pago con el remoto, no solo al
+  /// registrar/borrar un abono localmente.
+  static Future<void> recalculatePaymentStatus(String paymentId) async {
     final payment = getPaymentById(paymentId);
     if (payment == null) return;
 

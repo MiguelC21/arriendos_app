@@ -327,6 +327,11 @@ class SyncNotifier extends StateNotifier<SyncState> {
           for (var p in payments) {
             final abonos = abonosByPayment[p.id] ?? const [];
             await LocalStorageService.reconcileAbonosForPayment(p.id, abonos);
+            // paid_value/status del monthly_payment remoto puede venir
+            // incompleto si otro dispositivo abonó offline sin saber de este
+            // abono; se recalcula siempre a partir de los abonos ya
+            // reconciliados, que sí son la verdad completa.
+            await LocalStorageService.recalculatePaymentStatus(p.id);
           }
         }
       }
