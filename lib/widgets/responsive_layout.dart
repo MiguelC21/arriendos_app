@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../models/user_role.dart';
+import '../providers/auth_provider.dart';
+import '../providers/theme_provider.dart';
 import '../screens/tenant_list_screen.dart';
 import '../screens/settings_screen.dart';
-import '../providers/theme_provider.dart';
+import '../screens/user_management_screen.dart';
+import '../services/auth_service.dart';
 import 'connection_status_badge.dart';
 
 class ResponsiveLayout extends ConsumerWidget {
@@ -46,6 +50,11 @@ class ResponsiveLayout extends ConsumerWidget {
               onPressed: () => ref.read(themeModeProvider.notifier).toggleTheme(),
             ),
             ...?actions,
+            const SizedBox(width: 6),
+            const Padding(
+              padding: EdgeInsets.only(right: 12),
+              child: _UserAvatarMenu(),
+            ),
           ],
         ),
         body: mobileBody,
@@ -160,7 +169,12 @@ class ResponsiveLayout extends ConsumerWidget {
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 22),
+                  child: _UserProfileTile(),
+                ),
+                const SizedBox(height: 16),
                 Divider(color: sidebarBorder, height: 1),
                 const SizedBox(height: 16),
                 // Opciones del Menú
@@ -213,6 +227,20 @@ class ResponsiveLayout extends ConsumerWidget {
                     }
                   },
                 ),
+                if (ref.watch(canManageUsersProvider))
+                  _SidebarItem(
+                    icon: Icons.group_outlined,
+                    label: 'Gestión de Usuarios',
+                    isSelected: selectedIndex == 3,
+                    onTap: () {
+                      if (selectedIndex != 3) {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const UserManagementScreen()),
+                        );
+                      }
+                    },
+                  ),
                 const Spacer(),
                 Divider(color: sidebarBorder, height: 1),
                 // Footer con Toggle de Tema (Claro / Oscuro)
@@ -308,6 +336,169 @@ class ResponsiveLayout extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Botón circular con las iniciales del usuario. Al tocarlo abre un menú con
+/// su correo, su rol, acceso a Gestión de Usuarios (si aplica) y Cerrar
+/// sesión. Se usa tanto en el sidebar de escritorio como en el AppBar móvil.
+class _UserAvatarMenu extends ConsumerWidget {
+  const _UserAvatarMenu();
+
+  Future<void> _handleSelected(BuildContext context, String value) async {
+    if (value == 'logout') {
+      await AuthService().signOut();
+      // `AuthGate`, en la raíz de la app, reacciona solo al cambio de
+      // sesión: solo hace falta volver a esa raíz para que se vea.
+      if (context.mounted) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+    } else if (value == 'manage_users') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const UserManagementScreen()),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final role = ref.watch(currentUserRoleProvider).valueOrNull ?? UserRole.viewer;
+    final canManageUsers = ref.watch(canManageUsersProvider);
+    final email = AuthService().currentUser?.email ?? '';
+    final fullName = ref.watch(currentUserFullNameProvider).valueOrNull;
+    final displayName = (fullName != null && fullName.trim().isNotEmpty) ? fullName : email;
+    final initials = _initialsFor(displayName);
+
+    return PopupMenuButton<String>(
+      tooltip: 'Cuenta y sesión',
+      onSelected: (value) => _handleSelected(context, value),
+      itemBuilder: (context) => [
+        PopupMenuItem<String>(
+          enabled: false,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                displayName,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (displayName != email) ...[
+                const SizedBox(height: 1),
+                Text(
+                  email,
+                  style: const TextStyle(fontSize: 11.5, color: Colors.grey),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+              const SizedBox(height: 2),
+              Text(
+                role.label,
+                style: TextStyle(
+                  color: theme.colorScheme.primary,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(),
+        if (canManageUsers)
+          const PopupMenuItem<String>(
+            value: 'manage_users',
+            child: Row(
+              children: [
+                Icon(Icons.group_outlined, size: 18),
+                SizedBox(width: 10),
+                Text('Gestión de Usuarios'),
+              ],
+            ),
+          ),
+        const PopupMenuItem<String>(
+          value: 'logout',
+          child: Row(
+            children: [
+              Icon(Icons.logout_rounded, size: 18, color: Color(0xFFEF4444)),
+              SizedBox(width: 10),
+              Text('Cerrar sesión', style: TextStyle(color: Color(0xFFEF4444))),
+            ],
+          ),
+        ),
+      ],
+      child: CircleAvatar(
+        radius: 18,
+        backgroundColor: theme.colorScheme.primary,
+        child: Text(
+          initials,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+        ),
+      ),
+    );
+  }
+}
+
+/// "Miguel Angel" -> "MA", "admin@gmail.com" -> "A".
+String _initialsFor(String text) {
+  final trimmed = text.trim();
+  if (trimmed.isEmpty) return '?';
+  final words = trimmed.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+  if (words.length >= 2) {
+    return (words[0][0] + words[1][0]).toUpperCase();
+  }
+  return trimmed[0].toUpperCase();
+}
+
+/// Fila con el avatar (botón de cuenta) + correo y rol del usuario, usada en
+/// el sidebar de escritorio.
+class _UserProfileTile extends ConsumerWidget {
+  const _UserProfileTile();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final role = ref.watch(currentUserRoleProvider).valueOrNull ?? UserRole.viewer;
+    final email = AuthService().currentUser?.email ?? '';
+    final fullName = ref.watch(currentUserFullNameProvider).valueOrNull;
+    final displayName = (fullName != null && fullName.trim().isNotEmpty) ? fullName : email;
+
+    return Row(
+      children: [
+        const _UserAvatarMenu(),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                displayName,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                ),
+              ),
+              Text(
+                role.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isDark ? Colors.white54 : const Color(0xFF64748B),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

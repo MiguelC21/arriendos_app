@@ -8,7 +8,7 @@ import 'config/supabase_config.dart';
 import 'config/theme_config.dart';
 import 'providers/theme_provider.dart';
 import 'services/local_storage_service.dart';
-import 'screens/dashboard_screen.dart';
+import 'widgets/auth_gate.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -55,7 +55,7 @@ class ArriendosApp extends ConsumerWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeMode,
-      home: const DashboardScreen(),
+      home: const AuthGate(),
     );
   }
 }

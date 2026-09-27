@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../providers/auth_provider.dart';
 import '../providers/building_provider.dart';
 import '../providers/dashboard_provider.dart';
 import '../models/building.dart';
@@ -12,6 +13,7 @@ import '../widgets/responsive_layout.dart';
 import '../widgets/empty_state_view.dart';
 import '../widgets/kpi_card.dart';
 import '../widgets/adaptive_dialog.dart';
+import '../widgets/search_field.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -27,6 +29,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Widget build(BuildContext context) {
     final buildings = ref.watch(buildingProvider);
     final statsAsync = ref.watch(dashboardStatsProvider);
+    final canEdit = ref.watch(canEditProvider);
     final isDesktop = ResponsiveLayout.isDesktop(context);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
@@ -285,25 +288,25 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   SizedBox(
                     width: 260,
                     height: 44,
-                    child: TextField(
+                    child: SearchField(
+                      hintText: 'Buscar inmueble...',
                       onChanged: (val) => setState(() => _searchQuery = val.trim().toLowerCase()),
-                      decoration: InputDecoration(
-                        hintText: 'Buscar inmueble...',
-                        prefixIcon: const Icon(Icons.search_rounded, size: 18),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14),
-                        fillColor: isDark ? const Color(0xFF181A1F) : Colors.white,
+                      iconSize: 18,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                      fillColor: isDark ? const Color(0xFF181A1F) : Colors.white,
+                    ),
+                  ),
+                  if (canEdit) ...[
+                    const SizedBox(width: 12),
+                    ElevatedButton.icon(
+                      onPressed: () => _showAddBuildingDialog(context, ref),
+                      icon: const Icon(Icons.add_rounded, size: 18),
+                      label: const Text('Nuevo Inmueble'),
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(160, 44),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  ElevatedButton.icon(
-                    onPressed: () => _showAddBuildingDialog(context, ref),
-                    icon: const Icon(Icons.add_rounded, size: 18),
-                    label: const Text('Nuevo Inmueble'),
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size(160, 44),
-                    ),
-                  ),
+                  ],
                 ],
               );
 
@@ -333,13 +336,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
           if (!isDesktop) ...[
             const SizedBox(height: 14),
-            TextField(
+            SearchField(
+              hintText: 'Buscar por nombre o dirección...',
               onChanged: (val) => setState(() => _searchQuery = val.trim().toLowerCase()),
-              decoration: InputDecoration(
-                hintText: 'Buscar por nombre o dirección...',
-                prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                fillColor: isDark ? const Color(0xFF181A1F) : Colors.white,
-              ),
+              fillColor: isDark ? const Color(0xFF181A1F) : Colors.white,
             ),
           ],
           const SizedBox(height: 18),
@@ -359,8 +359,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   title: 'No tienes inmuebles registrados',
                   description:
                       'Registra tu primera casa, edificio o conjunto para empezar a administrar arriendos sin conexión.',
-                  buttonText: 'Agregar Inmueble',
-                  onButtonPressed: () => _showAddBuildingDialog(context, ref),
+                  buttonText: canEdit ? 'Agregar Inmueble' : null,
+                  onButtonPressed: canEdit ? () => _showAddBuildingDialog(context, ref) : null,
                 );
               }
 
@@ -470,7 +470,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       mobileBody: Stack(
         children: [
           bodyContent,
-          if (!isDesktop)
+          if (!isDesktop && canEdit)
             Positioned(
               left: 20,
               right: 20,
@@ -646,56 +646,57 @@ class _BuildingCard extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  PopupMenuButton<String>(
-                    icon: Icon(
-                      Icons.more_vert_rounded,
-                      color: isDark ? Colors.white38 : const Color(0xFF94A3B8),
-                      size: 20,
-                    ),
-                    color: theme.cardColor,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      side: BorderSide(
-                        color: isDark
-                            ? Colors.white.withValues(alpha: 0.1)
-                            : const Color(0xFFE2E8F0),
+                  if (ref.watch(canEditProvider))
+                    PopupMenuButton<String>(
+                      icon: Icon(
+                        Icons.more_vert_rounded,
+                        color: isDark ? Colors.white38 : const Color(0xFF94A3B8),
+                        size: 20,
                       ),
-                    ),
-                    onSelected: (value) {
-                      if (value == 'edit') {
-                        _showEditBuildingDialog(context, ref, building);
-                      } else if (value == 'delete') {
-                        _showDeleteConfirmDialog(context, ref, building);
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      PopupMenuItem(
-                        value: 'edit',
-                        child: Row(
-                          children: [
-                            Icon(Icons.edit_outlined, size: 18, color: theme.colorScheme.primary),
-                            const SizedBox(width: 10),
-                            Text(
-                              'Editar',
-                              style: TextStyle(
-                                color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      color: theme.cardColor,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        side: BorderSide(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.1)
+                              : const Color(0xFFE2E8F0),
+                        ),
+                      ),
+                      onSelected: (value) {
+                        if (value == 'edit') {
+                          _showEditBuildingDialog(context, ref, building);
+                        } else if (value == 'delete') {
+                          _showDeleteConfirmDialog(context, ref, building);
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        PopupMenuItem(
+                          value: 'edit',
+                          child: Row(
+                            children: [
+                              Icon(Icons.edit_outlined, size: 18, color: theme.colorScheme.primary),
+                              const SizedBox(width: 10),
+                              Text(
+                                'Editar',
+                                style: TextStyle(
+                                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(Icons.delete_outline_rounded, size: 18, color: Color(0xFFEF4444)),
-                            SizedBox(width: 10),
-                            Text('Eliminar', style: TextStyle(color: Color(0xFFEF4444))),
-                          ],
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete_outline_rounded, size: 18, color: Color(0xFFEF4444)),
+                              SizedBox(width: 10),
+                              Text('Eliminar', style: TextStyle(color: Color(0xFFEF4444))),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
                 ],
               ),
               const SizedBox(height: 12),

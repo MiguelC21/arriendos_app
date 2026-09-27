@@ -5,9 +5,22 @@ import '../models/unit.dart';
 import '../models/contract.dart';
 import '../models/monthly_payment.dart';
 import '../models/abono.dart';
+import '../services/auth_service.dart';
 import '../services/local_storage_service.dart';
 import '../services/supabase_service.dart';
 import '../services/sync_manager.dart';
+
+/// Se lanza cuando un usuario con rol de solo lectura intenta escribir datos.
+/// Es la última línea de defensa del lado del cliente: la UI ya oculta los
+/// botones de edición para ese rol, pero este guard evita que cualquier
+/// llamada directa al repositorio la esquive.
+class PermissionDeniedException implements Exception {
+  final String message;
+  PermissionDeniedException([this.message = 'No tienes permiso para editar estos datos.']);
+
+  @override
+  String toString() => message;
+}
 
 class AppRepository {
   final SupabaseService _supabaseService;
@@ -18,6 +31,12 @@ class AppRepository {
     SyncNotifier? syncNotifier,
   })  : _supabaseService = supabaseService ?? SupabaseService(),
         _syncNotifier = syncNotifier;
+
+  void _assertCanWrite() {
+    if (!AuthService.currentRole.canEditData) {
+      throw PermissionDeniedException();
+    }
+  }
 
   // ==========================================
   // 🏠 BUILDINGS
@@ -41,6 +60,7 @@ class AppRepository {
   }
 
   Future<void> addBuilding(Building building) async {
+    _assertCanWrite();
     // 1. Guardar inmediatamente en local
     await LocalStorageService.saveBuilding(building);
 
@@ -58,6 +78,7 @@ class AppRepository {
   }
 
   Future<void> updateBuilding(Building building) async {
+    _assertCanWrite();
     await LocalStorageService.saveBuilding(building);
 
     final queueId = const Uuid().v4();
@@ -73,6 +94,7 @@ class AppRepository {
   }
 
   Future<void> deleteBuilding(String id) async {
+    _assertCanWrite();
     await LocalStorageService.deleteBuilding(id);
 
     final queueId = const Uuid().v4();
@@ -125,6 +147,7 @@ class AppRepository {
   }
 
   Future<void> addUnit(Unit unit) async {
+    _assertCanWrite();
     await LocalStorageService.saveUnit(unit);
 
     final queueId = const Uuid().v4();
@@ -140,6 +163,7 @@ class AppRepository {
   }
 
   Future<void> updateUnit(Unit unit) async {
+    _assertCanWrite();
     await LocalStorageService.saveUnit(unit);
 
     final queueId = const Uuid().v4();
@@ -155,6 +179,7 @@ class AppRepository {
   }
 
   Future<void> deleteUnit(String id) async {
+    _assertCanWrite();
     await LocalStorageService.deleteUnit(id);
 
     final queueId = const Uuid().v4();
@@ -205,6 +230,7 @@ class AppRepository {
   }
 
   Future<void> addContract(Contract contract) async {
+    _assertCanWrite();
     await LocalStorageService.saveContract(contract);
 
     final queueId = const Uuid().v4();
@@ -220,6 +246,7 @@ class AppRepository {
   }
 
   Future<void> updateContract(Contract contract) async {
+    _assertCanWrite();
     await LocalStorageService.saveContract(contract);
 
     final queueId = const Uuid().v4();
@@ -235,6 +262,7 @@ class AppRepository {
   }
 
   Future<void> terminateContract(String id) async {
+    _assertCanWrite();
     await LocalStorageService.deleteContract(id);
 
     final queueId = const Uuid().v4();
@@ -270,6 +298,7 @@ class AppRepository {
 
   Future<void> insertMonthlyPaymentsBatch(List<MonthlyPayment> payments) async {
     if (payments.isEmpty) return;
+    _assertCanWrite();
     await LocalStorageService.saveMonthlyPaymentsBatch(payments);
 
     for (var p in payments) {
@@ -303,6 +332,7 @@ class AppRepository {
   }
 
   Future<void> addAbono(Abono abono) async {
+    _assertCanWrite();
     await LocalStorageService.saveAbono(abono);
 
     final queueId = const Uuid().v4();
@@ -330,6 +360,7 @@ class AppRepository {
   }
 
   Future<void> deleteAbono(String id) async {
+    _assertCanWrite();
     // Obtener abono antes de borrar para actualizar el pago
     final abonoLocal = LocalStorageService.getAbonosForPayment('')
         .where((a) => a.id == id)

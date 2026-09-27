@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../config/environment_config.dart';
+import '../models/user_role.dart';
+import '../services/auth_service.dart';
 import '../services/local_storage_service.dart';
 import '../services/supabase_service.dart';
 import '../services/sync_manager.dart';
+import '../providers/auth_provider.dart';
 import '../providers/building_provider.dart';
 import '../providers/dashboard_provider.dart';
 import '../providers/tenant_provider.dart';
 import '../providers/theme_provider.dart';
 import '../widgets/connection_status_badge.dart';
 import '../widgets/responsive_layout.dart';
+import 'user_management_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -41,8 +45,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       // 2. Conmutar cajas locales en Hive para aislar datos locales y de producción
       await LocalStorageService.switchEnvironment(newEnv);
 
-      // 3. Conmutar cliente Supabase hacia el nuevo endpoint
-      SupabaseService.switchEnvironment();
+      // 3. Conmutar cliente Supabase hacia el nuevo endpoint (recrea la sesión
+      // de auth: local y producción son proyectos con usuarios distintos).
+      await SupabaseService.switchEnvironment();
 
       // 4. Notificar al sincronizador para refrescar la cola del nuevo entorno y sincronizar
       await ref.read(syncProvider.notifier).onEnvironmentChanged();
@@ -51,6 +56,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ref.invalidate(buildingProvider);
       ref.invalidate(dashboardStatsProvider);
       ref.invalidate(activeTenantsProvider);
+      ref.invalidate(authStateChangesProvider);
+      ref.invalidate(currentUserRoleProvider);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -83,6 +90,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final syncState = ref.watch(syncProvider);
     final themeMode = ref.watch(themeModeProvider);
+    final isDeveloper = ref.watch(isDeveloperProvider);
+    final canManageUsers = ref.watch(canManageUsersProvider);
+    final currentRole = ref.watch(currentUserRoleProvider).valueOrNull ?? UserRole.viewer;
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final isDesktop = ResponsiveLayout.isDesktop(context);
@@ -142,29 +152,128 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
         ),
 
+        if (isDeveloper) ...[
+          const SizedBox(height: 36),
+
+          // 2. SECCIÓN: ENTORNO ACTIVO (solo Developer)
+          _buildSectionHeader(
+            title: 'Entorno de la Base de Datos',
+            subtitle: 'Alterna entre la base de datos de pruebas local y producción.',
+            icon: Icons.layers_rounded,
+          ),
+          const SizedBox(height: 12),
+          _buildEnvironmentCard(
+            env: AppEnvironment.production,
+            title: 'Producción (Supabase Cloud)',
+            subtitle: 'Base de datos oficial en la nube con los datos reales en vivo.',
+            icon: Icons.cloud_rounded,
+            color: const Color(0xFF10B981),
+          ),
+          const SizedBox(height: 10),
+          _buildEnvironmentCard(
+            env: AppEnvironment.local,
+            title: 'Pruebas en Local (Docker / CLI)',
+            subtitle: 'Aislado en tu computador (127.0.0.1:54321). Seguro para hacer pruebas.',
+            icon: Icons.developer_board_rounded,
+            color: const Color(0xFFF59E0B),
+          ),
+        ],
+
         const SizedBox(height: 36),
 
-        // 2. SECCIÓN: ENTORNO ACTIVO
+        // SECCIÓN: CUENTA
         _buildSectionHeader(
-          title: 'Entorno de la Base de Datos',
-          subtitle: 'Alterna entre la base de datos de pruebas local y producción.',
-          icon: Icons.layers_rounded,
+          title: 'Cuenta',
+          subtitle: 'Tu sesión, rol y contraseña.',
+          icon: Icons.account_circle_outlined,
         ),
         const SizedBox(height: 12),
-        _buildEnvironmentCard(
-          env: AppEnvironment.production,
-          title: 'Producción (Supabase Cloud)',
-          subtitle: 'Base de datos oficial en la nube con los datos reales en vivo.',
-          icon: Icons.cloud_rounded,
-          color: const Color(0xFF10B981),
-        ),
-        const SizedBox(height: 10),
-        _buildEnvironmentCard(
-          env: AppEnvironment.local,
-          title: 'Pruebas en Local (Docker / CLI)',
-          subtitle: 'Aislado en tu computador (127.0.0.1:54321). Seguro para hacer pruebas.',
-          icon: Icons.developer_board_rounded,
-          color: const Color(0xFFF59E0B),
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: theme.cardColor,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: isDark ? Colors.white.withValues(alpha: 0.07) : const Color(0xFFE2E8F0),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      AuthService().currentUser?.email ?? '',
+                      style: TextStyle(
+                        color: isDark ? Colors.white : const Color(0xFF0F172A),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      currentRole.label,
+                      style: TextStyle(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (canManageUsers) ...[
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const UserManagementScreen()),
+                    );
+                  },
+                  icon: const Icon(Icons.group_outlined, size: 18),
+                  label: const Text('Gestión de Usuarios'),
+                  style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 44)),
+                ),
+                const SizedBox(height: 10),
+              ],
+              OutlinedButton.icon(
+                onPressed: () => _showChangePasswordDialog(context),
+                icon: const Icon(Icons.lock_outline_rounded, size: 18),
+                label: const Text('Cambiar mi contraseña'),
+                style: OutlinedButton.styleFrom(minimumSize: const Size(double.infinity, 44)),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  await AuthService().signOut();
+                  // No navegamos manualmente a LoginScreen: `AuthGate`, en la
+                  // raíz de la app, reacciona solo al cambio de sesión. Solo
+                  // hace falta volver a esa raíz (por si hay pantallas
+                  // apiladas encima, como esta misma) para que se vea.
+                  if (context.mounted) {
+                    Navigator.of(context).popUntil((route) => route.isFirst);
+                  }
+                },
+                icon: const Icon(Icons.logout_rounded, size: 18),
+                label: const Text('Cerrar sesión'),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 44),
+                  foregroundColor: const Color(0xFFEF4444),
+                  side: const BorderSide(color: Color(0xFFEF4444)),
+                ),
+              ),
+            ],
+          ),
         ),
 
         const SizedBox(height: 36),
@@ -345,6 +454,87 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       title: 'Ajustes y Entorno',
       selectedIndex: 2,
       mobileBody: content,
+    );
+  }
+
+  void _showChangePasswordDialog(BuildContext context) {
+    final passwordController = TextEditingController();
+    final confirmController = TextEditingController();
+    bool isSaving = false;
+    String? errorText;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          title: const Text('Cambiar mi contraseña'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'Nueva contraseña'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: confirmController,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'Confirmar contraseña'),
+              ),
+              if (errorText != null) ...[
+                const SizedBox(height: 10),
+                Text(errorText!, style: const TextStyle(color: Colors.red, fontSize: 12.5)),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: isSaving
+                  ? null
+                  : () async {
+                      if (passwordController.text.length < 6) {
+                        setDialogState(() => errorText = 'Mínimo 6 caracteres.');
+                        return;
+                      }
+                      if (passwordController.text != confirmController.text) {
+                        setDialogState(() => errorText = 'Las contraseñas no coinciden.');
+                        return;
+                      }
+                      setDialogState(() {
+                        isSaving = true;
+                        errorText = null;
+                      });
+                      try {
+                        await AuthService().updatePassword(passwordController.text);
+                        if (dialogContext.mounted) Navigator.pop(dialogContext);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Contraseña actualizada correctamente.')),
+                          );
+                        }
+                      } catch (e) {
+                        setDialogState(() {
+                          isSaving = false;
+                          errorText = 'No se pudo actualizar: $e';
+                        });
+                      }
+                    },
+              child: isSaving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text('Guardar'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

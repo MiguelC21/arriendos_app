@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../models/building.dart';
 import '../models/unit.dart';
+import '../providers/auth_provider.dart';
 import '../providers/unit_provider.dart';
 import '../providers/contract_provider.dart';
 import '../providers/building_stats_provider.dart';
@@ -14,6 +15,7 @@ import '../widgets/connection_status_badge.dart';
 import '../widgets/responsive_layout.dart';
 import '../widgets/adaptive_dialog.dart';
 import '../widgets/empty_state_view.dart';
+import '../widgets/search_field.dart';
 
 class BuildingDetailScreen extends ConsumerStatefulWidget {
   final Building building;
@@ -45,6 +47,7 @@ class _BuildingDetailScreenState extends ConsumerState<BuildingDetailScreen> {
     final debtAsync = ref.watch(buildingDebtProvider(widget.building.id));
     final occupancyAsync = ref.watch(buildingOccupancyProvider(widget.building.id));
     final isDesktop = ResponsiveLayout.isDesktop(context);
+    final canEdit = ref.watch(canEditProvider);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
@@ -161,12 +164,14 @@ class _BuildingDetailScreenState extends ConsumerState<BuildingDetailScreen> {
                           Icons.monetization_on_rounded,
                           debt > 0 ? const Color(0xFFEF4444) : const Color(0xFF10B981),
                         ),
-                        const SizedBox(height: 24),
-                        ElevatedButton.icon(
-                          onPressed: () => _showAddUnitDialog(context, ref),
-                          icon: const Icon(Icons.add_rounded, size: 18),
-                          label: const Text('Agregar Apartamento'),
-                        ),
+                        if (canEdit) ...[
+                          const SizedBox(height: 24),
+                          ElevatedButton.icon(
+                            onPressed: () => _showAddUnitDialog(context, ref),
+                            icon: const Icon(Icons.add_rounded, size: 18),
+                            label: const Text('Agregar Apartamento'),
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -194,14 +199,12 @@ class _BuildingDetailScreenState extends ConsumerState<BuildingDetailScreen> {
                       final search = SizedBox(
                         width: 240,
                         height: 42,
-                        child: TextField(
+                        child: SearchField(
+                          hintText: 'Buscar número o apto...',
                           onChanged: (val) => setState(() => _unitSearchQuery = val.trim()),
-                          decoration: InputDecoration(
-                            hintText: 'Buscar número o apto...',
-                            prefixIcon: const Icon(Icons.search_rounded, size: 18),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                            fillColor: isDark ? const Color(0xFF181A1F) : Colors.white,
-                          ),
+                          iconSize: 18,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                          fillColor: isDark ? const Color(0xFF181A1F) : Colors.white,
                         ),
                       );
 
@@ -229,8 +232,8 @@ class _BuildingDetailScreenState extends ConsumerState<BuildingDetailScreen> {
                       icon: Icons.meeting_room_outlined,
                       title: 'No hay apartamentos creados',
                       description: 'Agrega el primer apartamento u oficina para este inmueble.',
-                      buttonText: 'Agregar Apartamento',
-                      onButtonPressed: () => _showAddUnitDialog(context, ref),
+                      buttonText: canEdit ? 'Agregar Apartamento' : null,
+                      onButtonPressed: canEdit ? () => _showAddUnitDialog(context, ref) : null,
                     )
                   else if (filteredUnits.isEmpty)
                     Center(
@@ -362,8 +365,8 @@ class _BuildingDetailScreenState extends ConsumerState<BuildingDetailScreen> {
                 icon: Icons.meeting_room_outlined,
                 title: 'No hay apartamentos en este inmueble',
                 description: 'Crea tu primer apartamento u oficina para empezar.',
-                buttonText: 'Agregar Apartamento',
-                onButtonPressed: () => _showAddUnitDialog(context, ref),
+                buttonText: canEdit ? 'Agregar Apartamento' : null,
+                onButtonPressed: canEdit ? () => _showAddUnitDialog(context, ref) : null,
               )
             else
               ListView.separated(
@@ -400,11 +403,12 @@ class _BuildingDetailScreenState extends ConsumerState<BuildingDetailScreen> {
             },
             icon: const Icon(Icons.refresh_rounded),
           ),
-          IconButton(
-            tooltip: 'Eliminar Inmueble',
-            onPressed: () => _showDeleteConfirmDialog(context, ref),
-            icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-          ),
+          if (canEdit)
+            IconButton(
+              tooltip: 'Eliminar Inmueble',
+              onPressed: () => _showDeleteConfirmDialog(context, ref),
+              icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
+            ),
           const SizedBox(width: 8),
         ],
       ),
@@ -412,7 +416,7 @@ class _BuildingDetailScreenState extends ConsumerState<BuildingDetailScreen> {
           ? desktopContent(currentDebt, totalUnits, rentedUnits)
           : mobileContent(currentDebt, totalUnits, rentedUnits),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton: isDesktop
+      floatingActionButton: (isDesktop || !canEdit)
           ? null
           : Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -623,31 +627,33 @@ class _UnitCard extends ConsumerWidget {
                         )
                   else
                     const StatusBadge(status: 'Disponible'),
-                  IconButton(
-                    tooltip: 'Editar Apartamento',
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    onPressed: () => _showEditUnitDialog(context, ref),
-                    icon: Icon(
-                      Icons.edit_outlined,
-                      size: 18,
-                      color: theme.colorScheme.primary,
+                  if (ref.watch(canEditProvider)) ...[
+                    IconButton(
+                      tooltip: 'Editar Apartamento',
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () => _showEditUnitDialog(context, ref),
+                      icon: Icon(
+                        Icons.edit_outlined,
+                        size: 18,
+                        color: theme.colorScheme.primary,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  IconButton(
-                    tooltip: 'Eliminar Apartamento',
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    onPressed: () => _showDeleteUnitConfirmDialog(context, ref),
-                    icon: const Icon(
-                      Icons.delete_outline_rounded,
-                      size: 18,
-                      color: Color(0xFFEF4444),
+                    const SizedBox(width: 6),
+                    IconButton(
+                      tooltip: 'Eliminar Apartamento',
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () => _showDeleteUnitConfirmDialog(context, ref),
+                      icon: const Icon(
+                        Icons.delete_outline_rounded,
+                        size: 18,
+                        color: Color(0xFFEF4444),
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
               const SizedBox(height: 6),

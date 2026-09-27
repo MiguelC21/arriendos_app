@@ -8,17 +8,18 @@ import '../models/monthly_payment.dart';
 import '../models/abono.dart';
 
 class SupabaseService {
-  static SupabaseClient? _clientInstance;
+  /// Usa el cliente de `Supabase.instance` (inicializado en main.dart) en vez
+  /// de crear uno manual: solo ese cliente persiste y recupera la sesión de
+  /// autenticación entre reinicios de la app (necesario para los roles de
+  /// usuario). Cambiar de entorno recrea esta instancia global apuntando al
+  /// nuevo endpoint.
+  static SupabaseClient get client => Supabase.instance.client;
 
-  static SupabaseClient get client => _clientInstance ??= SupabaseClient(
-        EnvironmentConfig.currentUrl,
-        EnvironmentConfig.currentAnonKey,
-      );
-
-  static void switchEnvironment() {
-    _clientInstance = SupabaseClient(
-      EnvironmentConfig.currentUrl,
-      EnvironmentConfig.currentAnonKey,
+  static Future<void> switchEnvironment() async {
+    await Supabase.instance.dispose();
+    await Supabase.initialize(
+      url: EnvironmentConfig.currentUrl,
+      anonKey: EnvironmentConfig.currentAnonKey,
     );
     debugPrint('⚡ SupabaseService conmutó al endpoint: ${EnvironmentConfig.currentUrl}');
   }

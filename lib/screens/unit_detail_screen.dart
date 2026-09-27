@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../models/unit.dart';
 import '../models/contract.dart';
+import '../providers/auth_provider.dart';
 import '../providers/contract_provider.dart';
 import '../providers/payment_provider.dart';
 import '../providers/building_stats_provider.dart';
@@ -44,6 +45,7 @@ class _UnitDetailScreenState extends ConsumerState<UnitDetailScreen> {
       decimalDigits: 0,
     );
     final isDesktop = ResponsiveLayout.isDesktop(context);
+    final canEdit = ref.watch(canEditProvider);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
@@ -186,7 +188,7 @@ class _UnitDetailScreenState extends ConsumerState<UnitDetailScreen> {
                     ],
                   ),
                 ),
-                if (contract != null)
+                if (contract != null && canEdit)
                   IconButton(
                     icon: Icon(
                       Icons.edit_outlined,
@@ -253,65 +255,69 @@ class _UnitDetailScreenState extends ConsumerState<UnitDetailScreen> {
                   ],
                 ],
               ),
-              const SizedBox(height: 20),
-              if (isDesktop) ...[
-                ElevatedButton.icon(
-                  onPressed: () => _showAddAbonoDialog(context, ref, contract),
-                  icon: const Icon(Icons.add_card_rounded, size: 18),
-                  label: const Text('Registrar Pago / Abono'),
-                ),
-                const SizedBox(height: 10),
-              ],
-              OutlinedButton.icon(
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: const Text('¿Finalizar Contrato?'),
-                      content: const Text(
-                        'Esta acción finalizará el contrato del inquilino y liberará la unidad para un nuevo arrendamiento.',
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('Cancelar'),
+              if (canEdit) ...[
+                const SizedBox(height: 20),
+                if (isDesktop) ...[
+                  ElevatedButton.icon(
+                    onPressed: () => _showAddAbonoDialog(context, ref, contract),
+                    icon: const Icon(Icons.add_card_rounded, size: 18),
+                    label: const Text('Registrar Pago / Abono'),
+                  ),
+                  const SizedBox(height: 10),
+                ],
+                OutlinedButton.icon(
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('¿Finalizar Contrato?'),
+                        content: const Text(
+                          'Esta acción finalizará el contrato del inquilino y liberará la unidad para un nuevo arrendamiento.',
                         ),
-                        ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFEF4444),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('Cancelar'),
                           ),
-                          onPressed: () async {
-                            await ref.read(contractProvider.notifier).terminateContract(
-                                  contract.id,
-                                  widget.unit.id,
-                                  widget.unit.buildingId,
-                                  ref,
-                                );
-                            if (!context.mounted) return;
-                            Navigator.pop(context);
-                          },
-                          child: const Text('Finalizar'),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(double.infinity, 46),
-                  side: const BorderSide(color: Color(0xFFEF4444), width: 1),
-                  foregroundColor: const Color(0xFFEF4444),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFEF4444),
+                            ),
+                            onPressed: () async {
+                              await ref.read(contractProvider.notifier).terminateContract(
+                                    contract.id,
+                                    widget.unit.id,
+                                    widget.unit.buildingId,
+                                    ref,
+                                  );
+                              if (!context.mounted) return;
+                              Navigator.pop(context);
+                            },
+                            child: const Text('Finalizar'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 46),
+                    side: const BorderSide(color: Color(0xFFEF4444), width: 1),
+                    foregroundColor: const Color(0xFFEF4444),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  icon: const Icon(Icons.exit_to_app_rounded, size: 18),
+                  label: const Text('Finalizar Contrato'),
                 ),
-                icon: const Icon(Icons.exit_to_app_rounded, size: 18),
-                label: const Text('Finalizar Contrato'),
-              ),
+              ],
             ] else ...[
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                onPressed: () => _showAddContractDialog(context, ref),
-                icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
-                label: const Text('Asignar Inquilino'),
-              ),
+              if (canEdit) ...[
+                const SizedBox(height: 20),
+                ElevatedButton.icon(
+                  onPressed: () => _showAddContractDialog(context, ref),
+                  icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+                  label: const Text('Asignar Inquilino'),
+                ),
+              ],
             ],
           ],
         ),
@@ -354,7 +360,7 @@ class _UnitDetailScreenState extends ConsumerState<UnitDetailScreen> {
                                   color: isDark ? Colors.white : const Color(0xFF0F172A),
                                 ),
                               ),
-                              if (contract != null)
+                              if (contract != null && canEdit)
                                 ElevatedButton.icon(
                                   onPressed: () => _showAddAbonoDialog(context, ref, contract),
                                   icon: const Icon(Icons.add_rounded, size: 18),
@@ -405,7 +411,7 @@ class _UnitDetailScreenState extends ConsumerState<UnitDetailScreen> {
                 ],
               ),
             ),
-      floatingActionButton: (!isDesktop && contract != null)
+      floatingActionButton: (!isDesktop && contract != null && canEdit)
           ? FloatingActionButton.extended(
               onPressed: () => _showAddAbonoDialog(context, ref, contract),
               label: const Text('Registrar Pago'),
@@ -976,7 +982,9 @@ class _PaymentHistoryList extends ConsumerWidget {
                                         fontSize: 12,
                                       ),
                                     ),
-                                    trailing: IconButton(
+                                    trailing: !ref.watch(canEditProvider)
+                                        ? null
+                                        : IconButton(
                                       icon: const Icon(
                                         Icons.delete_outline_rounded,
                                         size: 18,

@@ -9,6 +9,7 @@ import 'unit_detail_screen.dart';
 import '../widgets/responsive_layout.dart';
 import '../widgets/empty_state_view.dart';
 import '../widgets/status_badge.dart';
+import '../widgets/search_field.dart';
 
 class TenantListScreen extends ConsumerStatefulWidget {
   const TenantListScreen({super.key});
@@ -92,27 +93,22 @@ class _TenantListScreenState extends ConsumerState<TenantListScreen> {
                     SizedBox(
                       width: 280,
                       height: 44,
-                      child: TextField(
+                      child: SearchField(
+                        hintText: 'Buscar por nombre, tel, apto...',
                         onChanged: (val) => setState(() => _searchQuery = val.trim()),
-                        decoration: InputDecoration(
-                          hintText: 'Buscar por nombre, tel, apto...',
-                          prefixIcon: const Icon(Icons.search_rounded, size: 18),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 14),
-                          fillColor: isDark ? const Color(0xFF181A1F) : Colors.white,
-                        ),
+                        iconSize: 18,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                        fillColor: isDark ? const Color(0xFF181A1F) : Colors.white,
                       ),
                     ),
                 ],
               ),
               if (!isDesktop) ...[
                 const SizedBox(height: 14),
-                TextField(
+                SearchField(
+                  hintText: 'Buscar inquilino...',
                   onChanged: (val) => setState(() => _searchQuery = val.trim()),
-                  decoration: InputDecoration(
-                    hintText: 'Buscar inquilino...',
-                    prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                    fillColor: isDark ? const Color(0xFF181A1F) : Colors.white,
-                  ),
+                  fillColor: isDark ? const Color(0xFF181A1F) : Colors.white,
                 ),
               ],
               const SizedBox(height: 20),
