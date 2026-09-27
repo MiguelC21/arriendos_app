@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/auth_provider.dart';
 
@@ -33,13 +34,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
 
     try {
-      await ref.read(authServiceProvider).signInWithPassword(
+      await ref
+          .read(authServiceProvider)
+          .signInWithPassword(
             email: _emailController.text.trim(),
             password: _passwordController.text,
           );
+      // Le indica al sistema (Android/iOS) o al navegador que el inicio de
+      // sesión terminó con éxito, para que ofrezca guardar la contraseña.
+      TextInput.finishAutofillContext();
     } catch (e) {
+      TextInput.finishAutofillContext(shouldSave: false);
       setState(() {
-        _errorMessage = 'No se pudo iniciar sesión. Verifica tu correo y contraseña.';
+        _errorMessage =
+            'No se pudo iniciar sesión. Verifica tu correo y contraseña.';
       });
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -74,17 +82,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           Positioned(
             top: -90,
             left: -70,
-            child: _Blob(color: Colors.white.withValues(alpha: isDark ? 0.05 : 0.12), size: 260),
+            child: _Blob(
+              color: Colors.white.withValues(alpha: isDark ? 0.05 : 0.12),
+              size: 260,
+            ),
           ),
           Positioned(
             bottom: -110,
             right: -80,
-            child: _Blob(color: indigo.withValues(alpha: isDark ? 0.18 : 0.25), size: 320),
+            child: _Blob(
+              color: indigo.withValues(alpha: isDark ? 0.18 : 0.25),
+              size: 320,
+            ),
           ),
           Positioned(
             top: 120,
             right: -60,
-            child: _Blob(color: Colors.white.withValues(alpha: isDark ? 0.04 : 0.08), size: 160),
+            child: _Blob(
+              color: Colors.white.withValues(alpha: isDark ? 0.04 : 0.08),
+              size: 160,
+            ),
           ),
 
           SafeArea(
@@ -114,7 +131,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                           ],
                         ),
-                        child: const Icon(Icons.apartment_rounded, color: Colors.white, size: 40),
+                        child: const Icon(
+                          Icons.apartment_rounded,
+                          color: Colors.white,
+                          size: 40,
+                        ),
                       ),
                       const SizedBox(height: 20),
                       Text(
@@ -143,157 +164,203 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       Container(
                         padding: const EdgeInsets.fromLTRB(28, 32, 28, 28),
                         decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF15171C) : Colors.white,
+                          color: isDark
+                              ? const Color(0xFF15171C)
+                              : Colors.white,
                           borderRadius: BorderRadius.circular(28),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.18),
+                              color: Colors.black.withValues(
+                                alpha: isDark ? 0.4 : 0.18,
+                              ),
                               blurRadius: 36,
                               offset: const Offset(0, 18),
                             ),
                           ],
                         ),
-                        child: Form(
-                          key: _formKey,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text(
-                                'Inicia sesión',
-                                style: TextStyle(
-                                  fontSize: 19,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: -0.3,
-                                  color: isDark ? Colors.white : const Color(0xFF0F172A),
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Ingresa con tu correo y contraseña para continuar.',
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  color: isDark ? Colors.white54 : const Color(0xFF64748B),
-                                ),
-                              ),
-                              const SizedBox(height: 24),
-                              TextFormField(
-                                controller: _emailController,
-                                keyboardType: TextInputType.emailAddress,
-                                autofillHints: const [AutofillHints.email],
-                                decoration: InputDecoration(
-                                  labelText: 'Correo electrónico',
-                                  prefixIcon: const Icon(Icons.email_outlined, size: 20),
-                                  filled: true,
-                                  fillColor: isDark ? Colors.white.withValues(alpha: 0.04) : const Color(0xFFF8FAFC),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: BorderSide.none,
+                        child: AutofillGroup(
+                          child: Form(
+                            key: _formKey,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Text(
+                                  'Inicia sesión',
+                                  style: TextStyle(
+                                    fontSize: 19,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: -0.3,
+                                    color: isDark
+                                        ? Colors.white
+                                        : const Color(0xFF0F172A),
                                   ),
                                 ),
-                                validator: (value) {
-                                  if (value == null || value.trim().isEmpty) {
-                                    return 'Ingresa tu correo';
-                                  }
-                                  return null;
-                                },
-                              ),
-                              const SizedBox(height: 16),
-                              TextFormField(
-                                controller: _passwordController,
-                                obscureText: _obscurePassword,
-                                autofillHints: const [AutofillHints.password],
-                                decoration: InputDecoration(
-                                  labelText: 'Contraseña',
-                                  prefixIcon: const Icon(Icons.lock_outline_rounded, size: 20),
-                                  filled: true,
-                                  fillColor: isDark ? Colors.white.withValues(alpha: 0.04) : const Color(0xFFF8FAFC),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: BorderSide.none,
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Ingresa con tu correo y contraseña para continuar.',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    color: isDark
+                                        ? Colors.white54
+                                        : const Color(0xFF64748B),
                                   ),
-                                  suffixIcon: IconButton(
-                                    icon: Icon(
-                                      _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                                ),
+                                const SizedBox(height: 24),
+                                TextFormField(
+                                  controller: _emailController,
+                                  keyboardType: TextInputType.emailAddress,
+                                  autofillHints: const [
+                                    AutofillHints.username,
+                                    AutofillHints.email,
+                                  ],
+                                  decoration: InputDecoration(
+                                    labelText: 'Correo electrónico',
+                                    prefixIcon: const Icon(
+                                      Icons.email_outlined,
                                       size: 20,
                                     ),
-                                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                                    filled: true,
+                                    fillColor: isDark
+                                        ? Colors.white.withValues(alpha: 0.04)
+                                        : const Color(0xFFF8FAFC),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                      borderSide: BorderSide.none,
+                                    ),
                                   ),
+                                  validator: (value) {
+                                    if (value == null || value.trim().isEmpty) {
+                                      return 'Ingresa tu correo';
+                                    }
+                                    return null;
+                                  },
                                 ),
-                                validator: (value) {
-                                  if (value == null || value.isEmpty) {
-                                    return 'Ingresa tu contraseña';
-                                  }
-                                  return null;
-                                },
-                                onFieldSubmitted: (_) => _submit(),
-                              ),
-                              if (_errorMessage != null) ...[
-                                const SizedBox(height: 14),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFEF4444).withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(12),
+                                const SizedBox(height: 16),
+                                TextFormField(
+                                  controller: _passwordController,
+                                  obscureText: _obscurePassword,
+                                  autofillHints: const [AutofillHints.password],
+                                  decoration: InputDecoration(
+                                    labelText: 'Contraseña',
+                                    prefixIcon: const Icon(
+                                      Icons.lock_outline_rounded,
+                                      size: 20,
+                                    ),
+                                    filled: true,
+                                    fillColor: isDark
+                                        ? Colors.white.withValues(alpha: 0.04)
+                                        : const Color(0xFFF8FAFC),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    suffixIcon: IconButton(
+                                      icon: Icon(
+                                        _obscurePassword
+                                            ? Icons.visibility_outlined
+                                            : Icons.visibility_off_outlined,
+                                        size: 20,
+                                      ),
+                                      onPressed: () => setState(
+                                        () => _obscurePassword =
+                                            !_obscurePassword,
+                                      ),
+                                    ),
                                   ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.error_outline_rounded, size: 18, color: Color(0xFFEF4444)),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          _errorMessage!,
-                                          style: const TextStyle(color: Color(0xFFEF4444), fontSize: 12.5),
+                                  validator: (value) {
+                                    if (value == null || value.isEmpty) {
+                                      return 'Ingresa tu contraseña';
+                                    }
+                                    return null;
+                                  },
+                                  onFieldSubmitted: (_) => _submit(),
+                                ),
+                                if (_errorMessage != null) ...[
+                                  const SizedBox(height: 14),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 10,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(
+                                        0xFFEF4444,
+                                      ).withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.error_outline_rounded,
+                                          size: 18,
+                                          color: Color(0xFFEF4444),
                                         ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            _errorMessage!,
+                                            style: const TextStyle(
+                                              color: Color(0xFFEF4444),
+                                              fontSize: 12.5,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                                const SizedBox(height: 24),
+                                Container(
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(14),
+                                    gradient: LinearGradient(
+                                      colors: [primary, indigo],
+                                      begin: Alignment.centerLeft,
+                                      end: Alignment.centerRight,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: primary.withValues(alpha: 0.35),
+                                        blurRadius: 16,
+                                        offset: const Offset(0, 8),
                                       ),
                                     ],
                                   ),
-                                ),
-                              ],
-                              const SizedBox(height: 24),
-                              Container(
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(14),
-                                  gradient: LinearGradient(
-                                    colors: [primary, indigo],
-                                    begin: Alignment.centerLeft,
-                                    end: Alignment.centerRight,
-                                  ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: primary.withValues(alpha: 0.35),
-                                      blurRadius: 16,
-                                      offset: const Offset(0, 8),
-                                    ),
-                                  ],
-                                ),
-                                child: Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(
-                                    borderRadius: BorderRadius.circular(14),
-                                    onTap: _isLoading ? null : _submit,
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(vertical: 16),
-                                      child: Center(
-                                        child: _isLoading
-                                            ? const SizedBox(
-                                                width: 20,
-                                                height: 20,
-                                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                              )
-                                            : const Text(
-                                                'Ingresar',
-                                                style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 15,
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(14),
+                                      onTap: _isLoading ? null : _submit,
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 16,
+                                        ),
+                                        child: Center(
+                                          child: _isLoading
+                                              ? const SizedBox(
+                                                  width: 20,
+                                                  height: 20,
+                                                  child:
+                                                      CircularProgressIndicator(
+                                                        strokeWidth: 2,
+                                                        color: Colors.white,
+                                                      ),
+                                                )
+                                              : const Text(
+                                                  'Ingresar',
+                                                  style: TextStyle(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 15,
+                                                  ),
                                                 ),
-                                              ),
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
