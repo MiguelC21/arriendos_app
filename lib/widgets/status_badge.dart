@@ -19,7 +19,11 @@ class StatusBadge extends StatelessWidget {
     Color color;
     String text = status;
 
-    if (normalized.contains('al día') || normalized == 'al dia' || normalized == 'pagado') {
+    if (normalized.contains('adelanto')) {
+      // Va antes que 'parcial': "Adelanto parcial..." no es un mes parcial
+      // de deuda sino dinero ya recibido por adelantado.
+      color = const Color(0xFF8B5CF6); // Violet
+    } else if (normalized.contains('al día') || normalized == 'al dia' || normalized == 'pagado') {
       color = const Color(0xFF10B981); // Emerald Green
       text = 'Al Día';
     } else if (normalized.contains('mora')) {
@@ -67,13 +71,17 @@ class StatusBadge extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 6),
-          Text(
-            text,
-            style: TextStyle(
-              color: color,
-              fontSize: fontSize,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.3,
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: color,
+                fontSize: fontSize,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.3,
+              ),
             ),
           ),
         ],

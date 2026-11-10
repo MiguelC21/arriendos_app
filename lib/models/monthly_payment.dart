@@ -1,4 +1,5 @@
 import 'package:uuid/uuid.dart';
+import 'contract.dart';
 
 enum PaymentStatus { pendiente, parcial, pagado, mora }
 
@@ -25,6 +26,31 @@ class MonthlyPayment {
     DateTime? createdAt,
   }) : id = id ?? const Uuid().v4(),
        createdAt = createdAt ?? DateTime.now();
+
+  /// `true` si el periodo (año/mes) de este pago es posterior al mes actual,
+  /// es decir, es un mes que el inquilino pagó por adelantado. Estos meses no
+  /// cuentan como deuda ni como mora hasta que llegue su turno.
+  bool isAdvanceAt(DateTime now) =>
+      year * 12 + month > now.year * 12 + now.month;
+
+  /// Construye el pago de un contrato para un periodo concreto, con id
+  /// estable y la fecha de vencimiento calculada igual que la generación
+  /// automática de cada mes.
+  static MonthlyPayment forPeriod(Contract contract, int year, int month) {
+    final lastDayOfNextMonth = DateTime(year, month + 2, 0).day;
+    final dueDateDay = contract.startDate.day > lastDayOfNextMonth
+        ? lastDayOfNextMonth
+        : contract.startDate.day;
+    return MonthlyPayment(
+      id: deterministicId(contract.id, year, month),
+      contractId: contract.id,
+      month: month,
+      year: year,
+      totalValue: contract.contractValue,
+      dueDate: DateTime(year, month + 1, dueDateDay),
+      status: PaymentStatus.pendiente,
+    );
+  }
 
   /// Id estable para el pago de un contrato en un mes/año dado. Los pagos
   /// mensuales se generan automáticamente en cada dispositivo al abrir la

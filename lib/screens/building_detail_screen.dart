@@ -621,7 +621,9 @@ class _UnitCard extends ConsumerWidget {
                   ),
                   if (contract != null)
                     ref.watch(unitStatusProvider(unit.id)).when(
-                          data: (status) => StatusBadge(status: status),
+                          data: (status) => Flexible(
+                            child: StatusBadge(status: status),
+                          ),
                           loading: () => const SizedBox.shrink(),
                           error: (_, __) => const SizedBox.shrink(),
                         )

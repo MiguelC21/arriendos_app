@@ -5,6 +5,7 @@ import '../models/unit.dart';
 import '../models/contract.dart';
 import '../models/monthly_payment.dart';
 import '../models/abono.dart';
+import '../services/advance_payment_planner.dart';
 import '../services/auth_service.dart';
 import '../services/local_storage_service.dart';
 import '../services/supabase_service.dart';
@@ -479,8 +480,11 @@ class AppRepository {
     if (contract == null) return 0.0;
 
     final payments = LocalStorageService.getPaymentsForContract(contract.id);
+    final now = DateTime.now();
     double debt = 0.0;
     for (var p in payments) {
+      // Los meses adelantados (futuros) a medias no son deuda todavía.
+      if (p.isAdvanceAt(now)) continue;
       if (!p.toMap()['is_fully_paid']) {
         debt += (p.totalValue - p.paidValue);
       }
@@ -493,10 +497,15 @@ class AppRepository {
     if (contract == null) return 'Disponible';
 
     final payments = LocalStorageService.getPaymentsForContract(contract.id);
-    final pending = payments.where((p) => p.paidValue < p.totalValue).toList();
-    if (pending.isEmpty) return 'Al Día';
-
     final now = DateTime.now();
+    final pending = payments
+        .where((p) => p.paidValue < p.totalValue && !p.isAdvanceAt(now))
+        .toList();
+    if (pending.isEmpty) {
+      // Sin deuda: si hay meses adelantados, el estado lo dice en vez de "Al Día".
+      return AdvancePaymentPlanner.advanceStatusLabel(payments, now) ?? 'Al Día';
+    }
+
     for (var p in pending) {
       if (now.isAfter(p.dueDate)) return 'En Mora';
     }

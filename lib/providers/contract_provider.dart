@@ -121,32 +121,8 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
             }
           }
 
-          final dueDateDay =
-              contract.startDate.day >
-                      DateTime(checkDate.year, checkDate.month + 2, 0).day
-                  ? DateTime(checkDate.year, checkDate.month + 2, 0).day
-                  : contract.startDate.day;
-
-          final dueDate = DateTime(
-            checkDate.year,
-            checkDate.month + 1,
-            dueDateDay,
-          );
-
           paymentsToInsert.add(
-            MonthlyPayment(
-              id: MonthlyPayment.deterministicId(
-                contract.id,
-                checkDate.year,
-                checkDate.month,
-              ),
-              contractId: contract.id,
-              month: checkDate.month,
-              year: checkDate.year,
-              totalValue: contract.contractValue,
-              dueDate: dueDate,
-              status: PaymentStatus.pendiente,
-            ),
+            MonthlyPayment.forPeriod(contract, checkDate.year, checkDate.month),
           );
         }
         checkDate = DateTime(checkDate.year, checkDate.month + 1);

@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../models/unit.dart';
 import '../models/contract.dart';
+import '../models/monthly_payment.dart';
+import '../services/advance_payment_planner.dart';
 import '../providers/auth_provider.dart';
 import '../providers/contract_provider.dart';
 import '../providers/payment_provider.dart';
@@ -688,9 +690,65 @@ class _AbonoDialogContent extends StatefulWidget {
   State<_AbonoDialogContent> createState() => _AbonoDialogContentState();
 }
 
+const _shortMonths = [
+  '',
+  'Ene',
+  'Feb',
+  'Mar',
+  'Abr',
+  'May',
+  'Jun',
+  'Jul',
+  'Ago',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dic',
+];
+
 class _AbonoDialogContentState extends State<_AbonoDialogContent> {
   final _amountController = TextEditingController();
   bool _isLoading = false;
+
+  /// Atajo elegido por el usuario (1, 2, 3, 6 o 12 meses). 0 = ninguno: el
+  /// monto puede ser libre y lo que exceda la deuda se aplica como adelanto
+  /// a los meses siguientes, hasta [_maxAdvanceMonths].
+  int _advanceMonths = 0;
+
+  static const int _maxAdvanceMonths = 12;
+
+  /// Meses nuevos que se permite crear con este pago.
+  int get _effectiveMonths =>
+      _advanceMonths > 0 ? _advanceMonths : _maxAdvanceMonths;
+
+  List<MonthlyPayment> _currentPayments() =>
+      widget.ref.read(paymentProvider(widget.contract.id)).asData?.value ??
+      const <MonthlyPayment>[];
+
+  String _formatAmount(double value) => NumberFormat.currency(
+        locale: 'es_CO',
+        symbol: '',
+        decimalDigits: 0,
+      ).format(value).trim();
+
+  void _selectAdvance(int months) {
+    // Tocar de nuevo el atajo activo lo desactiva (vuelve a monto libre).
+    if (months == _advanceMonths) {
+      setState(() => _advanceMonths = 0);
+      return;
+    }
+    setState(() => _advanceMonths = months);
+    if (months > 0) {
+      // Sugerimos el monto completo (deuda + N meses); se puede editar para
+      // registrar un adelanto parcial.
+      final capacity = AdvancePaymentPlanner.capacity(
+        contract: widget.contract,
+        existing: _currentPayments(),
+        advanceMonths: months,
+      );
+      _amountController.text = _formatAmount(capacity);
+    }
+  }
 
   @override
   void initState() {
@@ -721,11 +779,27 @@ class _AbonoDialogContentState extends State<_AbonoDialogContent> {
       decimalDigits: 0,
     );
 
-    final currentDebt = debtAsync.asData?.value ?? 0.0;
+    final payments = _currentPayments();
+    final capacity = AdvancePaymentPlanner.capacity(
+      contract: widget.contract,
+      existing: payments,
+      advanceMonths: _effectiveMonths,
+    );
     final inputAmount =
         double.tryParse(_amountController.text.replaceAll('.', '')) ?? 0.0;
-    final isOverLimit = inputAmount > currentDebt;
+    final isOverLimit = inputAmount > capacity + 0.5;
     final isInvalid = inputAmount <= 0;
+
+    // Meses adelantados que cubriría el monto escrito (vista previa).
+    final now = DateTime.now();
+    final advancePreview = (inputAmount > 0 && !isOverLimit)
+        ? AdvancePaymentPlanner.plan(
+            contract: widget.contract,
+            existing: payments,
+            amount: inputAmount,
+            advanceMonths: _effectiveMonths,
+          ).applications.where((a) => a.payment.isAdvanceAt(now)).toList()
+        : const <PlannedApplication>[];
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -782,21 +856,59 @@ class _AbonoDialogContentState extends State<_AbonoDialogContent> {
             ],
           ),
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 16),
+        const Text(
+          'Atajos para adelantar meses',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            for (final n in const [1, 2, 3, 6, 12])
+              ChoiceChip(
+                label: Text('$n ${n == 1 ? 'mes' : 'meses'}'),
+                selected: _advanceMonths == n,
+                onSelected: _isLoading ? null : (_) => _selectAdvance(n),
+              ),
+          ],
+        ),
+        const SizedBox(height: 16),
         TextField(
           controller: _amountController,
           decoration: InputDecoration(
-            labelText: 'Monto a Abonar',
+            labelText: advancePreview.isNotEmpty
+                ? 'Monto a pagar (deuda + adelanto)'
+                : 'Monto a Abonar',
             hintText: '0',
             prefixIcon: const Icon(Icons.attach_money_rounded, size: 20),
+            helperText: 'Lo que exceda la deuda se aplica como adelanto a '
+                'los meses siguientes.',
+            helperMaxLines: 2,
             errorText: isOverLimit
-                ? 'No puedes superar la deuda total'
+                ? 'El máximo es ${currencyFormat.format(capacity)}'
                 : null,
           ),
           keyboardType: TextInputType.number,
           inputFormatters: [CurrencyInputFormatter()],
           enabled: !_isLoading,
         ),
+        if (advancePreview.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFEFF6FF),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFBFDBFE)),
+            ),
+            child: Text(
+              'Adelanto: ${advancePreview.map((a) => '${_shortMonths[a.payment.month]} ${a.payment.year}${a.isPartial ? ' (parcial)' : ''}').join(', ')}',
+              style: const TextStyle(fontSize: 13, color: Color(0xFF1E40AF)),
+            ),
+          ),
+        ],
         const SizedBox(height: 24),
         ElevatedButton.icon(
           onPressed: (_isLoading || isOverLimit || isInvalid)
@@ -815,13 +927,17 @@ class _AbonoDialogContentState extends State<_AbonoDialogContent> {
                             buildingId: widget.unit.buildingId,
                             unitId: widget.unit.id,
                             ref: widget.ref,
+                            contract: widget.contract,
+                            advanceMonths: _effectiveMonths,
                           );
                       if (context.mounted) {
                         Navigator.pop(context);
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: const Text(
-                              'Pago registrado correctamente',
+                            content: Text(
+                              advancePreview.isNotEmpty
+                                  ? 'Pago y adelanto registrados correctamente'
+                                  : 'Pago registrado correctamente',
                             ),
                             backgroundColor: Colors.green.shade700,
                             behavior: SnackBarBehavior.floating,
@@ -919,17 +1035,23 @@ class _PaymentHistoryList extends ConsumerWidget {
                     ),
                   ),
                   subtitle: Text(
-                    '${currencyFormat.format(p.paidValue)} / ${currencyFormat.format(p.totalValue)}',
+                    '${p.isAdvanceAt(DateTime.now()) ? 'Adelanto · ' : ''}${currencyFormat.format(p.paidValue)} / ${currencyFormat.format(p.totalValue)}',
                     style: TextStyle(
                       color: isDark ? Colors.white54 : const Color(0xFF64748B),
                       fontSize: 13,
                     ),
                   ),
-                  trailing: _StatusBadge(
-                    status: p.status.name,
-                    month: p.month,
-                    year: p.year,
-                  ),
+                  trailing: (p.isAdvanceAt(DateTime.now()) && p.paidValue > 0)
+                      ? StatusBadge(
+                          status: p.status == PaymentStatus.pagado
+                              ? 'Adelanto pagado'
+                              : 'Adelanto parcial',
+                        )
+                      : _StatusBadge(
+                          status: p.status.name,
+                          month: p.month,
+                          year: p.year,
+                        ),
                   children: [
                     Consumer(
                       builder: (context, ref, child) {

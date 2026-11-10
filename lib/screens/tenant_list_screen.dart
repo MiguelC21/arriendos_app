@@ -364,7 +364,12 @@ class _TenantCard extends ConsumerWidget {
                           ],
                         );
                       }
-                      return const StatusBadge(status: 'Al Día');
+                      // Sin deuda: "Al Día" o, si hay meses adelantados,
+                      // "Adelanto de N meses" / "Adelanto parcial...".
+                      return ref.watch(unitStatusProvider(tenant.unitId)).maybeWhen(
+                            data: (status) => StatusBadge(status: status),
+                            orElse: () => const StatusBadge(status: 'Al Día'),
+                          );
                     },
                     loading: () => const SizedBox.shrink(),
                     error: (_, __) => const SizedBox.shrink(),
