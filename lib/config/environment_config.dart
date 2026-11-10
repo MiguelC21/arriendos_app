@@ -15,6 +15,11 @@ class EnvironmentConfig {
   // En Android Emulator 10.0.2.2 mapea a 127.0.0.1 del host.
   // En Web o Windows Desktop se usa 127.0.0.1 directamente.
   static String get localUrl {
+    // Permite sobrescribir con --dart-define=LOCAL_URL=... (p. ej. cuando
+    // Windows reserva el rango de puertos 54226-54425 y Supabase local debe
+    // correr en otros puertos).
+    const override = String.fromEnvironment('LOCAL_URL', defaultValue: '');
+    if (override.isNotEmpty) return override;
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       return 'http://10.0.2.2:54321';
     }

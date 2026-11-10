@@ -25,6 +25,14 @@ class ConnectionStatusBadge extends ConsumerWidget {
       label = syncState.pendingCount > 0
           ? '${syncState.pendingCount} pendientes'
           : 'Sin conexión';
+    } else if (syncState.serverUnreachable) {
+      // Hay red en el dispositivo pero el servidor no responde (p. ej. el
+      // proyecto de Supabase está pausado o inaccesible).
+      badgeColor = const Color(0xFFEF4444); // Rojo
+      icon = Icons.cloud_off_rounded;
+      label = syncState.pendingCount > 0
+          ? 'Servidor no responde (${syncState.pendingCount})'
+          : 'Servidor no responde';
     } else {
       // Online
       if (isLocal) {
@@ -48,11 +56,14 @@ class ConnectionStatusBadge extends ConsumerWidget {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              syncState.pendingCount > 0
+              syncState.serverUnreachable
+                  ? 'No se puede contactar al servidor. Tus cambios están a salvo en este dispositivo y se subirán cuando vuelva.'
+                  : syncState.pendingCount > 0
                   ? 'Sincronizando ${syncState.pendingCount} operaciones pendientes...'
+                      '${syncState.lastError != null ? '\nÚltimo error: ${syncState.lastError}' : ''}'
                   : 'Todo está sincronizado con la nube.',
             ),
-            duration: const Duration(seconds: 2),
+            duration: Duration(seconds: syncState.lastError != null ? 8 : 2),
             behavior: SnackBarBehavior.floating,
           ),
         );

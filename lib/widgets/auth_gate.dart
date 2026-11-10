@@ -14,25 +14,29 @@ class AuthGate extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authStateChangesProvider);
+    // Un error en el stream (p. ej. falló el refresh de token por falta de
+    // red) no significa que no haya sesión: AuthService.currentSession es
+    // una lectura local que sigue vigente si Supabase no la invalidó.
+    final session = authState.valueOrNull?.session ??
+        ref.read(authServiceProvider).currentSession;
 
-    return authState.when(
-      data: (state) {
-        final session = state.session ?? ref.read(authServiceProvider).currentSession;
-        if (session == null) {
-          return const LoginScreen();
-        }
+    if (session == null) {
+      if (authState.isLoading) {
+        return const _AuthLoadingScreen();
+      }
+      return const LoginScreen();
+    }
 
-        final roleAsync = ref.watch(currentUserRoleProvider);
-        return roleAsync.when(
-          data: (_) => const DashboardScreen(),
-          loading: () => const _AuthLoadingScreen(),
-          // Si falló la consulta de red, AuthService ya cayó al rol cacheado:
-          // seguimos igual hacia el Dashboard con ese rol.
-          error: (_, __) => const DashboardScreen(),
-        );
-      },
+    final roleAsync = ref.watch(currentUserRoleProvider);
+    return roleAsync.when(
+      // Si ya hay un rol cargado, un recálculo no debe volver al loader.
+      skipLoadingOnReload: true,
+      skipLoadingOnRefresh: true,
+      data: (_) => const DashboardScreen(),
       loading: () => const _AuthLoadingScreen(),
-      error: (_, __) => const LoginScreen(),
+      // Si falló la consulta de red, AuthService ya cayó al rol cacheado:
+      // seguimos igual hacia el Dashboard con ese rol.
+      error: (_, __) => const DashboardScreen(),
     );
   }
 }

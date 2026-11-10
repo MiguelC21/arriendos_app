@@ -344,6 +344,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ],
               ),
+              if (syncState.serverUnreachable) ...[
+                const SizedBox(height: 10),
+                const Text(
+                  'No se puede contactar al servidor aunque tengas internet. '
+                  'Puede que el proyecto de Supabase esté pausado (los '
+                  'proyectos gratuitos se pausan tras una semana sin uso) o '
+                  'que tu red bloquee el dominio. Tus cambios están guardados '
+                  'en este dispositivo y se subirán solos cuando el servidor '
+                  'vuelva a responder. No cierres sesión ni borres los datos '
+                  'de la app mientras tanto.',
+                  style: TextStyle(color: Color(0xFFEF4444), fontSize: 12),
+                ),
+              ],
+              if (pendingCount > 0 && syncState.lastError != null) ...[
+                const SizedBox(height: 10),
+                SelectableText(
+                  'Último error: ${syncState.lastError}',
+                  style: const TextStyle(
+                    color: Color(0xFFEF4444),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
               Divider(
                 height: 24,
                 color: isDark ? Colors.white12 : const Color(0xFFE2E8F0),
@@ -392,8 +415,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           messenger.showSnackBar(
                             SnackBar(
                               content: Text(
-                                'Aviso: Quedaron $remaining operaciones pendientes. Verifica que Supabase local esté activo.',
+                                'Aviso: Quedaron $remaining operaciones pendientes.'
+                                '${ref.read(syncProvider).lastError != null ? '\n${ref.read(syncProvider).lastError}' : ' Revisa tu conexión.'}',
                               ),
+                              duration: const Duration(seconds: 10),
                               backgroundColor: Colors.orange.shade800,
                               behavior: SnackBarBehavior.floating,
                             ),

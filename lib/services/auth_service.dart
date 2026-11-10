@@ -40,13 +40,18 @@ class AuthService {
 
   /// Consulta el rol del usuario en `profiles`. Si no hay red disponible,
   /// cae al último rol cacheado localmente para ese usuario (modo offline).
+  ///
+  /// El timeout es necesario porque, con señal pero sin internet real (red
+  /// "fantasma"), el socket puede quedarse esperando indefinidamente en vez
+  /// de fallar rápido, dejando la app trabada en la pantalla de carga.
   Future<UserRole> fetchRole(String userId) async {
     try {
       final response = await _client
           .from('profiles')
           .select('role')
           .eq('id', userId)
-          .single();
+          .single()
+          .timeout(const Duration(seconds: 8));
       final role = UserRole.fromString(response['role'] as String?);
       _currentRole = role;
       await _cacheRole(userId, role);

@@ -431,7 +431,20 @@ class SupabaseService {
     switch (action.toLowerCase()) {
       case 'insert':
       case 'upsert':
-        await _client.from(table).upsert(data);
+        if (table == 'monthly_payments' && action.toLowerCase() == 'insert') {
+          // La generación automática de pagos mensuales corre en cada
+          // dispositivo. Si el mes ya existe en el servidor (creado por otro
+          // dispositivo, con abonos incluso), NO se debe sobrescribir: se
+          // ignora la inserción. El 23505 cubre el caso de una fila antigua
+          // con otro id para el mismo mes cuando exista el índice único.
+          try {
+            await _client.from(table).upsert(data, ignoreDuplicates: true);
+          } on PostgrestException catch (e) {
+            if (e.code != '23505') rethrow;
+          }
+        } else {
+          await _client.from(table).upsert(data);
+        }
         break;
       case 'update':
         if (id != null) {

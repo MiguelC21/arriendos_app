@@ -26,6 +26,19 @@ class MonthlyPayment {
   }) : id = id ?? const Uuid().v4(),
        createdAt = createdAt ?? DateTime.now();
 
+  /// Id estable para el pago de un contrato en un mes/año dado. Los pagos
+  /// mensuales se generan automáticamente en cada dispositivo al abrir la
+  /// unidad; con un id aleatorio, dos dispositivos aún no sincronizados
+  /// creaban cada uno su propia fila para el mismo mes (duplicados). Con un
+  /// id derivado de (contrato, año, mes), ambos generan el MISMO id y el
+  /// servidor los trata como una sola fila.
+  static String deterministicId(String contractId, int year, int month) {
+    return const Uuid().v5(
+      Namespace.url.value,
+      'arriendos-app/monthly-payment/$contractId/$year/$month',
+    );
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,

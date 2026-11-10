@@ -135,6 +135,11 @@ class ContractNotifier extends StateNotifier<Map<String, Contract?>> {
 
           paymentsToInsert.add(
             MonthlyPayment(
+              id: MonthlyPayment.deterministicId(
+                contract.id,
+                checkDate.year,
+                checkDate.month,
+              ),
               contractId: contract.id,
               month: checkDate.month,
               year: checkDate.year,

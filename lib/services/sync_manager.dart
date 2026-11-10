@@ -23,11 +23,17 @@ class SyncState {
   final String? lastError;
   final DateTime? lastSyncTime;
 
+  /// `true` si el último intento no pudo contactar al servidor aun habiendo
+  /// red en el dispositivo (p. ej. proyecto de Supabase pausado/eliminado,
+  /// DNS bloqueado o servidor caído).
+  final bool serverUnreachable;
+
   const SyncState({
     required this.connectionState,
     required this.pendingCount,
     this.lastError,
     this.lastSyncTime,
+    this.serverUnreachable = false,
   });
 
   bool get isOnline => connectionState != SyncConnectionState.offline;
@@ -38,12 +44,14 @@ class SyncState {
     int? pendingCount,
     String? lastError,
     DateTime? lastSyncTime,
+    bool? serverUnreachable,
   }) {
     return SyncState(
       connectionState: connectionState ?? this.connectionState,
       pendingCount: pendingCount ?? this.pendingCount,
       lastError: lastError,
       lastSyncTime: lastSyncTime ?? this.lastSyncTime,
+      serverUnreachable: serverUnreachable ?? this.serverUnreachable,
     );
   }
 }
@@ -56,6 +64,22 @@ class SyncNotifier extends StateNotifier<SyncState> {
   Timer? _realtimeDebounce;
   bool _isProcessing = false;
   bool _rerunRequested = false;
+  // Error del último elemento de la cola que el servidor rechazó. Se guarda
+  // aparte porque `SyncState.copyWith` descarta `lastError` en cada update.
+  String? _lastQueueError;
+  bool _unreachable = false;
+
+  /// Errores de conectividad hacia el servidor (no rechazos de la base).
+  static bool _isUnreachableError(Object e) {
+    if (e is PostgrestException) return false;
+    final s = e.toString();
+    return s.contains('Failed host lookup') ||
+        s.contains('SocketException') ||
+        s.contains('TimeoutException') ||
+        s.contains('Connection refused') ||
+        s.contains('Connection timed out') ||
+        s.contains('ClientException');
+  }
 
   static const _realtimeTables = [
     'buildings',
@@ -179,6 +203,7 @@ class SyncNotifier extends StateNotifier<SyncState> {
       pendingCount: LocalStorageService.getPendingSyncCount(),
     );
 
+    _unreachable = false;
     try {
       // 1. Subir cambios pendientes locales a Supabase
       await _processPendingQueue();
@@ -190,7 +215,12 @@ class SyncNotifier extends StateNotifier<SyncState> {
         connectionState: SyncConnectionState.online,
         pendingCount: LocalStorageService.getPendingSyncCount(),
         lastSyncTime: DateTime.now(),
-        lastError: null,
+        // Si quedan elementos que el servidor rechazó, conservamos el error
+        // para poder mostrarlo al tocar el badge.
+        lastError: LocalStorageService.getPendingSyncCount() > 0
+            ? _lastQueueError
+            : null,
+        serverUnreachable: _unreachable,
       );
 
       // Notificar a Riverpod para refrescar UI inmediatamente con datos frescos
@@ -234,14 +264,22 @@ class SyncNotifier extends StateNotifier<SyncState> {
   /// Procesa la cola de mutaciones acumuladas en modo offline.
   /// Vuelve a leer la cola tras cada pasada para no dejar fuera elementos
   /// que se encolaron mientras esta misma pasada estaba en curso.
+  ///
+  /// Un elemento que el servidor rechaza (p. ej. RLS, FK, validación) se omite
+  /// en esta pasada para no bloquear a los demás; se reintentará en la próxima.
+  /// Un error de red sí detiene toda la pasada (no tiene sentido seguir).
   Future<void> _processPendingQueue() async {
+    final failedIds = <String>{};
+    _lastQueueError = null;
     while (true) {
-      final queue = LocalStorageService.getPendingSyncQueue();
+      final queue = LocalStorageService.getPendingSyncQueue()
+          .where((i) => !failedIds.contains(i['id'] as String))
+          .toList();
       if (queue.isEmpty) return;
 
       debugPrint('🔄 Procesando cola de sincronización (${queue.length} elementos)...');
 
-      bool hadError = false;
+      bool networkError = false;
       for (var item in queue) {
         final queueId = item['id'] as String;
         final table = item['table'] as String;
@@ -258,10 +296,15 @@ class SyncNotifier extends StateNotifier<SyncState> {
           await LocalStorageService.removeFromSyncQueue(queueId);
         } catch (e) {
           debugPrint('Error procesando item $queueId de tabla $table: $e');
-          state = state.copyWith(lastError: e.toString());
-          hadError = true;
-          // Si hay error, paramos para reintentar luego
-          break;
+          _lastQueueError = '$table/$action: $e';
+          state = state.copyWith(lastError: _lastQueueError);
+          failedIds.add(queueId);
+          if (e is! PostgrestException) {
+            // Error de red/timeout: paramos y reintentamos con el próximo disparador.
+            networkError = true;
+            if (_isUnreachableError(e)) _unreachable = true;
+            break;
+          }
         }
       }
 
@@ -269,10 +312,9 @@ class SyncNotifier extends StateNotifier<SyncState> {
         pendingCount: LocalStorageService.getPendingSyncCount(),
       );
 
-      // Si hubo un error nos detenemos por completo (se reintentará con el
-      // próximo disparador). Si no, volvemos a leer la cola por si se
-      // añadieron elementos nuevos durante esta pasada.
-      if (hadError) return;
+      // Tras una pasada volvemos a leer la cola por si se añadieron elementos
+      // nuevos mientras tanto (los ya fallidos se excluyen arriba).
+      if (networkError) return;
     }
   }
 
@@ -338,6 +380,7 @@ class SyncNotifier extends StateNotifier<SyncState> {
       debugPrint('📥 Datos sincronizados y guardados en almacenamiento local.');
     } catch (e) {
       debugPrint('Aviso: no se pudo completar syncDown (posiblemente offline): $e');
+      if (_isUnreachableError(e)) _unreachable = true;
     }
   }
 
